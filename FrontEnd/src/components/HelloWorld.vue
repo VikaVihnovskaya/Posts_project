@@ -1,6 +1,6 @@
 <template>
   <div class="register-user">
-    <h2>Register New </h2>
+    <h2>Register user </h2>
 
     <form @submit.prevent="registerUser">
       <div>
