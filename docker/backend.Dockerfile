@@ -18,6 +18,7 @@ COPY BackEnd/ ./
 
 # API обычно слушает порт 3000
 EXPOSE 3000
+EXPOSE 9229
 
 # Запускаем backend через nodemon (следит за изменениями)
-CMD ["nodemon", "index.js"]
+CMD ["nodemon", "--inspect=0.0.0.0:9229", "index.js"]
