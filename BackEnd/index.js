@@ -1,4 +1,5 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import bodyParser from "body-parser";
 import userRoutes from "./routes/userRoutes.js";
@@ -12,6 +13,8 @@ const MONGO_URL = process.env.MONGO_URL;
 // Middleware для парсинга JSON
 app.use(bodyParser.json());
 
+// Чтение токенов из cookies
+app.use(cookieParser());
 // Подключение роутов
 app.use("/api/users", userRoutes);
 

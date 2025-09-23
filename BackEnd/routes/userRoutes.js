@@ -38,7 +38,7 @@ router.post("/create", async (req, res) => {
         res.status(500).json({message: "Internal server error"});
     }
 });
-//  POST /api/users/login (авторизация и получение токена)
+//  POST /api/users/login (авторизация и установка cookie)
 router.post("/login", async (req, res) => {
     try {
         const {login, password} = req.body;
@@ -67,17 +67,29 @@ router.post("/login", async (req, res) => {
         const token = jwt.sign(payload, process.env.JWT_SECRET, {
             expiresIn: '5h'
         });
-        res.status(200).json({message: "User login to system successfully", token});
+        res.cookie("token", token, {
+            httpOnly: true,
+            sameSite: "Strict",
+            maxAge: 1000 * 60 * 60 * 5 // 5 часов
+        });
+        res.status(200).json({message: "User login to system successfully"});
     } catch (error) {
         console.error("Error is occurred during login:", error);
         res.status(500).json({message: "Internal server error"});
     }
 });
-// GET/api/users Получить всех юзеров
+// POST /api/users/logout → удаление токена из cookie
+router.post("/logout", (req, res) => {
+    res.clearCookie("token", {
+        httpOnly: true,
+        sameSite: "Strict"
+    });
+    res.status(200).json({ message: "Logged out successfully" });
+});
+// GET/api/users Получить всех юзеров(только авторизованным)
 router.get("/", verifyToken, async (req, res) => {
     try {
-        const filter = {};
-        const allUsers = await User.find(filter);
+        const allUsers = await User.find();
 
         const usersDetails = allUsers.map(user => {
                 return {
@@ -86,7 +98,6 @@ router.get("/", verifyToken, async (req, res) => {
                 };
             }
         );
-
         res.status(200).json({usersDetails});
     } catch (error) {
         console.error("Error fetching users details:", error);
