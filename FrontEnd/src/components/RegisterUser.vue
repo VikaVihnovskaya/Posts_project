@@ -29,6 +29,10 @@
     </form>
 
     <p v-if="message" :class="{ error: isError }">{{ message }}</p>
+    <p class="nav-link">
+      Already have an account?
+      <router-link to="/login">Log in</router-link>
+    </p>
   </div>
 </template>
 
@@ -47,11 +51,18 @@ const registerUser = async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ login: login.value, password: password.value }),
     });
+    let data = null;
+    const contentType = res.headers.get("Content-Type") || "";
 
-    const data = await res.json();
+    if (contentType.includes("application/json")) {
+      const text = await res.text(); // читаем тело как текст
+      if (text) {
+        data = JSON.parse(text); // парсим вручную
+      }
+    }
 
     if (!res.ok) {
-      throw new Error(data.message || "Registration failed");
+      throw new Error(data?.message || "Registration failed");
     }
 
     message.value = "✅ User registered successfully!";
@@ -97,5 +108,9 @@ button:hover {
 }
 .error {
   color: red;
+}
+.nav-link {
+  margin-top: 1rem;
+  text-align: center;
 }
 </style>
