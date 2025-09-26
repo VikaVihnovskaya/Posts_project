@@ -2,7 +2,7 @@
   <div class="profile">
     <h2>👤 Welcome to your profile!</h2>
 
-<!--    <p><strong>ID:</strong> {{ user?.sub }}</p>-->
+    <p><strong>ID:</strong> {{ user?.id }}</p>
     <p><strong>User name:</strong> {{ user?.login }}</p>
 
     <button @click="logout">🚪 Log out</button>

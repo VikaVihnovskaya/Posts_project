@@ -5,27 +5,15 @@
     <form @submit.prevent="registerUser">
       <div>
         <label for="login">Login:</label>
-        <input
-            id="login"
-            v-model="login"
-            type="text"
-            placeholder="Enter login"
-            required
-        />
+        <input id="login" v-model="login" type="text" placeholder="Enter login" required />
       </div>
 
       <div>
         <label for="password">Password:</label>
-        <input
-            id="password"
-            v-model="password"
-            type="password"
-            placeholder="Enter password"
-            required
-        />
+        <input id="password" v-model="password" type="password" placeholder="Enter password" required />
       </div>
 
-      <button type="submit">Register</button>
+      <button type="submit" :disabled="auth.loading">{{ auth.loading ? 'Loading…' : 'Register' }}</button>
     </form>
 
     <p v-if="message" :class="{ error: isError }">{{ message }}</p>
@@ -37,43 +25,28 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref } from 'vue'
+import { useAuthStore } from '../stores/auth'
 
-const login = ref("");
-const password = ref("");
-const message = ref("");
-const isError = ref(false);
+const auth = useAuthStore()
+
+const login = ref('')
+const password = ref('')
+const message = ref('')
+const isError = ref(false)
 
 const registerUser = async () => {
-  try {
-    const res = await fetch("/api/users/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ login: login.value, password: password.value }),
-    });
-    let data = null;
-    const contentType = res.headers.get("Content-Type") || "";
-
-    if (contentType.includes("application/json")) {
-      const text = await res.text(); // читаем тело как текст
-      if (text) {
-        data = JSON.parse(text); // парсим вручную
-      }
-    }
-
-    if (!res.ok) {
-      throw new Error(data?.message || "Registration failed");
-    }
-
-    message.value = "✅ User registered successfully!";
-    isError.value = false;
-    login.value = "";
-    password.value = "";
-  } catch (err) {
-    message.value = "❌ " + err.message;
-    isError.value = true;
+  const { ok, message: msg } = await auth.register({ login: login.value, password: password.value })
+  if (ok) {
+    message.value = '✅ User registered successfully!'
+    isError.value = false
+    login.value = ''
+    password.value = ''
+  } else {
+    message.value = '❌ ' + (msg || 'Registration failed')
+    isError.value = true
   }
-};
+}
 </script>
 
 <style scoped>

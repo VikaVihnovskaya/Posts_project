@@ -5,26 +5,15 @@
     <form @submit.prevent="loginUser">
       <div>
         <label for="login">Login:</label>
-        <input
-            id="login"
-            v-model="login"
-            type="text"
-            placeholder="Enter login"
-            required
-        />
+        <input id="login" v-model="login" type="text" placeholder="Enter login" required />
       </div>
 
       <div>
         <label for="password">Password:</label>
-        <input
-            id="password"
-            v-model="password"
-            type="password"
-            placeholder="Enter password"
-            required
-        />
+        <input id="password" v-model="password" type="password" placeholder="Enter password" required />
       </div>
-      <button type="submit">Login</button>
+
+      <button type="submit" :disabled="auth.loading">{{ auth.loading ? 'Loading…' : 'Login' }}</button>
     </form>
 
     <p v-if="message" :class="{ error: isError }">{{ message }}</p>
@@ -33,53 +22,36 @@
       <router-link to="/">Register</router-link>
     </p>
     <p class="nav-link">
-      <a href="#">Forgot your password?</a> <!-- Пока не реализовано -->
+      <a href="#">Forgot your password?</a>
     </p>
   </div>
 </template>
 
 <script setup>
-import { ref } from "vue";
-import router from "../router/index.js";
+import { ref } from 'vue'
+import router from '../router/index.js'
+import { useAuthStore } from '../stores/auth'
 
-const login = ref("");
-const password = ref("");
-const message = ref("");
-const isError = ref(false);
+const auth = useAuthStore()
+
+const login = ref('')
+const password = ref('')
+const message = ref('')
+const isError = ref(false)
 
 const loginUser = async () => {
-  try {
-    const res = await fetch("/api/users/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include", // обязательно для отправки/приёма cookie
-      body: JSON.stringify({ login: login.value, password: password.value }),
-    });
-
-    let data = null;
-    const contentType = res.headers.get("Content-Type") || "";
-
-    if (contentType.includes("application/json")) {
-      const text = await res.text();
-      if (text) {
-        data = JSON.parse(text);
-      }
-    }
-
-    if (!res.ok) {
-      throw new Error(data?.message || "Login failed");
-    }
-
-    message.value = "✅ Logged in successfully!";
-    isError.value = false;
-    login.value = "";
-    password.value = "";
+  const { ok, message: msg } = await auth.login({ login: login.value, password: password.value })
+  if (ok) {
+    message.value = '✅ Logged in successfully!'
+    isError.value = false
+    login.value = ''
+    password.value = ''
     router.push('/profile')
-  } catch (err) {
-    message.value = "❌ " + err.message;
-    isError.value = true;
+  } else {
+    message.value = '❌ ' + (msg || 'Login failed')
+    isError.value = true
   }
-};
+}
 </script>
 
 <style scoped>
