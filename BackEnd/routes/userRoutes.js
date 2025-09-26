@@ -104,8 +104,9 @@ router.get("/", verifyToken, async (req, res) => {
         res.status(500).json({message: "Internal server error"});
     }
 });
-// GET/api/users/me - защищенный эндроинт
-router.get("/me", verifyToken, (req, res) => {
+
+// GET/api/users/me - профиль текущего пользователя (защищённый)
+router.get("/check", verifyToken, (req, res) => {
     res.status(200).json({
         id: req.user.sub,
         login: req.user.login
