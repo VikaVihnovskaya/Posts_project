@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import bodyParser from "body-parser";
 import userRoutes from "./routes/userRoutes.js";
+import postRoutes from "./routes/postRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT;
@@ -17,6 +18,7 @@ app.use(bodyParser.json());
 app.use(cookieParser());
 // Подключение роутов
 app.use("/api/users", userRoutes);
+app.use("/api/posts", postRoutes);
 
 // Подключение к MongoDB
 mongoose
