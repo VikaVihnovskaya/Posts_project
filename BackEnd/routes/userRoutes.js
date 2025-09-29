@@ -5,7 +5,6 @@ import bcrypt from 'bcryptjs';
 import {verifyToken} from "../middleware/verifyToken.js";
 
 const router = express.Router();
-
 // POST /api/users/create → создание пользователя
 router.post("/create", async (req, res) => {
     try {
@@ -105,7 +104,7 @@ router.get("/", verifyToken, async (req, res) => {
     }
 });
 
-// GET/api/users/me - профиль текущего пользователя (защищённый)
+// GET/api/users/check - профиль текущего пользователя (защищённый)
 router.get("/check", verifyToken, (req, res) => {
     res.status(200).json({
         id: req.user.sub,
