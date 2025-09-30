@@ -19,7 +19,7 @@
     <p v-if="message" :class="{ error: isError }">{{ message }}</p>
     <p class="nav-link">
       Don't have an account?
-      <router-link to="/">Register</router-link>
+      <router-link to="/register">Register</router-link>
     </p>
     <p class="nav-link">
       <a href="#">Forgot your password?</a>
