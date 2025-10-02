@@ -1,11 +1,16 @@
 <template>
+
   <div class="profile">
+    <header class="topbar">
+      <router-link class="btn outline" to="/">← Home</router-link>
+      <router-link class="btn" to="/create">Create Post</router-link>
+      <button @click="logout">Log out</button>
+    </header>
     <h2>👤 Welcome to your profile!</h2>
 
     <p><strong>ID:</strong> {{ user?.id }}</p>
     <p><strong>User name:</strong> {{ user?.login }}</p>
 
-    <button @click="logout">🚪 Log out</button>
   </div>
 </template>
 
@@ -27,14 +32,31 @@ const logout = () => {
 
 <style scoped>
 .profile {
-  max-width: 400px;
-  margin: 2rem auto;
-  padding: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  max-width: 1200px;
+  margin: 1rem auto;
+  padding: 0 1rem;
+
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.btn {
+  padding: 6px 12px;
+  background: #42b883;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .2s ease-in-out;
+}
+.btn:hover {
+  background: #2a9d6f;
 }
 button {
-  margin-top: 1rem;
   padding: 6px 12px;
   background: #ff6b6b;
   color: white;

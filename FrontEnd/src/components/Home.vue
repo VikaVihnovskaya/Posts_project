@@ -4,6 +4,7 @@
       <div class="auth-actions">
         <template v-if="isAuth">
           <router-link class="btn" to="/profile">Profile</router-link>
+          <router-link class="btn" to="/create">Create Post</router-link>
           <button class="btn outline" @click="onLogout">Log out</button>
         </template>
         <template v-else>
@@ -146,7 +147,6 @@ watch(page, load)
 .btn.outline:hover {
     background: #2a9d6f;
     color: #fff;
-
 }
 .feed {
   display: grid;
