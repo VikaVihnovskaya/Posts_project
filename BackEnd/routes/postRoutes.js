@@ -43,7 +43,7 @@ router.get('/:id', async (req, res) => {
         const { id } = req.params
         if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid post id' })
 
-        const post = await Post.findById(id).lean()
+        const post = await Post.findById(id).populate('categories', 'name').lean()
         if (!post) return res.status(404).json({ message: 'Post not found' })
 
         if (post.status !== 'published') return res.status(403).json({ message: 'Post is not public' })
