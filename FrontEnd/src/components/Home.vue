@@ -16,7 +16,9 @@
     <h1>Welcome to the list of posts! </h1>
     <section class="feed" v-if="items.length">
       <article v-for="post in items" :key="post._id" class="post-card">
-        <h3 class="title">{{ post.title }}</h3>
+        <router-link :to="{ name: 'PostView', params: { id: post._id } }" class="title-link">
+          <h3 class="title">{{ post.title }}</h3>
+        </router-link>
         <p class="meta" v-if="post.publishedAt">Published: {{ formatDate(post.publishedAt) }}</p>
         <p class="summary">{{ post.summary }}</p>
       </article>
@@ -45,7 +47,6 @@ const isAuth = computed(() => !!auth.user)
 const items = ref([])
 const loading = ref(false)
 const error = ref('')
-
 // Пагинация
 const page = ref(0)
 const limit = ref(10)
@@ -62,10 +63,16 @@ async function load() {
   error.value = ''
   try {
     const res = await fetch(`/api/posts?limit=${limit.value}&page=${page.value}`)
-    if (!res.ok) throw new Error('Failed to load posts')
+
+    if (!res.ok) {
+      error.value = 'Failed to load posts'
+      items.value = []
+      total.value = 0
+      return
+    }
+
     const data = await res.json()
 
-    // Бэкенд возвращает все посты; отфильтруем публичные на клиенте
     const publicItems = Array.isArray(data.items)
         ? data.items.filter(p => p.status === 'published')
         : []
@@ -91,7 +98,6 @@ function prevPage() {
     page.value -= 1
   }
 }
-
 async function onLogout() {
   await auth.logout()
   // при желании можно перезагрузить ленту
@@ -99,7 +105,6 @@ async function onLogout() {
 }
 
 onMounted(async () => {
-  // Попробуем подтянуть сессию, чтобы корректно отобразить кнопки
   if (!auth.user) {
     await auth.checkAuth()
   }
@@ -157,13 +162,23 @@ watch(page, load)
   border: 1px solid #e5e5e5;
   border-radius: 8px;
   padding: .75rem 1rem;
+  overflow: hidden;
+  transition: background .2s ease-in-out, box-shadow .2s ease-in-out;
 }
 .post-card:hover {
-  background: #cccccc;
+  background: inherit;
   opacity: 0.7;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 .title {
   margin: 0 0 .25rem 0;
+}
+.title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.title-link:hover {
+  text-decoration: underline;
 }
 .meta {
   color: #777;

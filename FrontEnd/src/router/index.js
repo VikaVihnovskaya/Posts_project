@@ -7,6 +7,7 @@ const routes = [
     { path: '/login', name: 'LoginUser', component: () => import('../components/LoginUser.vue') },
     { path: '/profile', name: 'Profile', component: () => import('../components/Profile.vue'), meta: { requiresAuth: true } },
     { path: '/create', name: 'CreatePost', component: () => import('../components/CreatePost.vue'), meta: { requiresAuth: true } },
+    { path: '/posts/:id', name: 'PostView', component: () => import('../components/PostView.vue') },
 ]
 
 const router = createRouter({
