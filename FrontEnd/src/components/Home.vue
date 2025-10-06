@@ -20,6 +20,7 @@
           <h3 class="title">{{ post.title }}</h3>
         </router-link>
         <p class="meta" v-if="post.publishedAt">Published: {{ formatDate(post.publishedAt) }}</p>
+        <p class="meta warn" v-else-if="isAuth && String(post.userId) === String(auth.user?.sub)">Draft — visible only to you</p>
         <p class="summary">{{ post.summary }}</p>
       </article>
     </section>
@@ -62,7 +63,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetch(`/api/posts?limit=${limit.value}&page=${page.value}`)
+    const res = await fetch(`/api/posts?limit=${limit.value}&page=${page.value}, {credentials: 'include'}`)
 
     if (!res.ok) {
       error.value = 'Failed to load posts'
@@ -70,15 +71,9 @@ async function load() {
       total.value = 0
       return
     }
-
     const data = await res.json()
-
-    const publicItems = Array.isArray(data.items)
-        ? data.items.filter(p => p.status === 'published')
-        : []
-
-    items.value = publicItems
-    total.value = data.total ?? publicItems.length
+    items.value = Array.isArray(data.items) ? data.items : []
+    total.value = data.total || 0
   } catch (e) {
     error.value = e.message || 'Error loading posts'
     items.value = []
@@ -110,7 +105,6 @@ onMounted(async () => {
   }
   await load()
 })
-
 watch(page, load)
 </script>
 
@@ -159,6 +153,7 @@ watch(page, load)
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 .post-card {
+  min-height: 180px;
   border: 1px solid #e5e5e5;
   border-radius: 8px;
   padding: .75rem 1rem;
@@ -181,9 +176,12 @@ watch(page, load)
   text-decoration: underline;
 }
 .meta {
-  color: #777;
+  color: forestgreen;
   font-size: .9rem;
   margin: 0 0 .5rem 0;
+}
+.meta.warn {
+  color: lightgreen;
 }
 .summary {
   margin: 0;
