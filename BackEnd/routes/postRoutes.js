@@ -2,6 +2,7 @@ import express from 'express'
 import mongoose from 'mongoose'
 import Post from '../models/Post.js'
 import {verifyToken} from '../middleware/verifyToken.js'
+import { optionalVerifyToken } from '../middleware/optionalVerifyToken.js'
 import Category from "../models/Category.js";
 
 const router = express.Router()
@@ -18,42 +19,50 @@ function reconcilePublishFields(doc) {
         doc.publishedAt = null
     }
 }
-//GET / — список постов (публичный)
-router.get('/', async (req, res) => {
+//GET / — список постов (публичный + собственные непубличные для владельца)
+router.get('/', optionalVerifyToken, async (req, res) => {
     try {
-        const { limit, page } = parsePaging(req);
-        const allPosts = await Post.find()
-            .sort({ publishedAt: -1 }) // сортировка по дате создания
-            .limit(limit)
-            .skip(page * limit)
-            .lean()
-
-        const total = await Post.countDocuments()
-
-        res.json({ items: allPosts, page, limit, total })
-    } catch (err) {
+        const { limit, page } = parsePaging(req)
+        let filter = { status: 'published' }
+        if (req.user?.sub){
+            filter = {
+                $or: [
+                    { status: 'published' },
+                    { userId: req.user.sub },
+                ]
+            }
+        }
+        const [items, total] = await Promise.all([
+            Post.find(filter)
+                .sort({ publishedAt: -1, id: -1 })
+                .limit(limit)
+                .skip(page * limit)
+                .lean(),
+            Post.countDocuments(filter),
+        ])
+        res.json({ items, page, limit, total })
+    } catch (err){
         console.error(err)
         res.status(500).json({ message: 'Failed to load posts' })
     }
 })
 
+
 // GET /:id — получить один пост (публичный)
-router.get('/:id', async (req, res) => {
-    try {
-        const { id } = req.params
-        if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid post id' })
+router.get('/:id', optionalVerifyToken, async (req, res) => {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid post id' })
+    const post = await Post.findById(id).populate('categories', 'name').lean()
+    if (!post) return res.status(404).json({ message: 'Post not found' })
 
-        const post = await Post.findById(id).populate('categories', 'name').lean()
-        if (!post) return res.status(404).json({ message: 'Post not found' })
-
-        if (post.status !== 'published') return res.status(403).json({ message: 'Post is not public' })
-
-        res.json(post)
-    } catch (err) {
-        console.error(err)
-        res.status(500).json({ message: 'Failed to load post' })
+    if (post.status !== 'published') {
+        if (!req.user || String(post.userId) !== String(req.user.sub)) {
+            return res.status(403).json({ message: 'Post is not public' })
+        }
     }
+    res.json(post)
 })
+
 // POST api/posts/create — создать пост (ТОЛЬКО авторизованным, через verifyToken)
 router.post('/', verifyToken, async (req, res) => {
     try {

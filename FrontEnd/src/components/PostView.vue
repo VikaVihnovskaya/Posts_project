@@ -1,5 +1,5 @@
 <template>
-  <div class="post-view">
+  <div class="post-view" :class="{ editing: editPost }">
     <header class="topbar">
       <router-link class="btn outline" to="/">← Back</router-link>
       <div v-if="isOwner" class="owner-actions">
@@ -78,10 +78,8 @@
             <span>Tags (comma-separated)</span>
             <input v-model.trim="form.tagsText" type="text" placeholder="Enter new tags" />
           </label>
-
           <!-- Категории пока не редактируем, но отправим текущие названия, если есть -->
-          <div class="hint">Categories are preserved as is.</div>
-
+<!--          <div class="hint">Categories are preserved as is.</div>-->
           <div class="actions">
             <button class="btn" type="submit" :disabled="busy">Save</button>
             <button class="btn outline" type="button" @click="cancelEdit" :disabled="busy">Cancel</button>
@@ -144,7 +142,8 @@ async function load() {
     if (!auth.user) {
       await auth.checkAuth().catch(() => {})
     }
-    const res = await fetch(`/api/posts/${id}`)
+    const res = await fetch(`/api/posts/${id}`, {
+      credentials: 'include',})
     const data = await res.json().catch(() => null)
 
     if (!res.ok) {
@@ -206,6 +205,7 @@ async function onSave() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      credentials: 'include',
     })
 
     const data = await res.json().catch(() => null)
@@ -226,21 +226,39 @@ async function onDelete() {
 
   busy.value = true
   error.value = ''
-  if (!res.ok && res.status !== 204) {
-    error.value = data?.message || 'Failed to delete post'
+  try {
+    const res = await fetch(`/api/posts/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    })
+    if (!res.ok && res.status !== 204) {
+      const data = await res.json().catch(() => null)
+      error.value = data?.message || 'Failed to delete post'
+      busy.value = false
+      return
+    }
+    router.push('/')
+  } finally {
     busy.value = false
-    return
   }
-  router.push('/')
 }
 onMounted(load)
 </script>
 
 <style scoped>
 .post-view {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 1rem auto;
-  padding: 0 1rem;
+  padding: 2rem 1rem;
+  min-height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.post-view.editing {
+  max-width: 1280px;
+  margin: 1rem auto;
+  padding: 2rem 1rem;
 }
 .topbar {
   display: flex;
@@ -248,6 +266,7 @@ onMounted(load)
   justify-content: space-between;
   margin-bottom: 1rem;
 }
+
 .btn {
   padding: 6px 12px;
   background: #42b883;
@@ -326,25 +345,32 @@ pre.plain {
   margin-bottom: .75rem;
 }
 .edit-form {
-  display: grid;
-  gap: .75rem;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-sizing: border-box;
 }
 .field {
-  display: grid;
-  gap: .25rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
 }
+
 .field > span {
-  font-weight: 600;
+  font-weight: 800;
 }
 .field input, .field textarea, .field select {
-  padding: .5rem;
+  box-sizing: border-box;
+  width: 100%;
+  padding: .75rem;
   border: 1px solid #e5e5e5;
   border-radius: 6px;
+  font-size: 1rem;
 }
-.hint {
-  color: #777;
-  font-size: .9rem;
-}
+textarea { resize: vertical; }
 .actions {
   display: flex;
   gap: .5rem;
