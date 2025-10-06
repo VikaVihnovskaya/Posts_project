@@ -198,11 +198,13 @@ async function onSubmit() {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+
 }
 .field {
   display: flex;
   flex-direction: column;
   gap: .5rem;
+  box-sizing: border-box;
 }
 .field.inline {
   flex-direction: row;
@@ -215,6 +217,7 @@ async function onSubmit() {
   gap: 1rem;
 }
 textarea {
+  box-sizing: border-box;
   width: 100%;
   color: #1a1a1a;
   border: 1px solid #ddd;
