@@ -45,7 +45,33 @@
             <li v-for="(t, i) in post.tags" :key="i">#{{ t }}</li>
           </ul>
         </div>
+        <section class="comments" v-if="isPublished">
+          <h3>Comments</h3>
+          <div v-if="commentsLoading" class="state">Loading comments…</div>
+          <div v-else-if="commentsError" class="state error">{{ commentsError }}</div>
+
+          <ul v-else-if="comments.length" class="comment">
+            <li v-for="c in comments" :key="c._id" class="comment-item">
+              <div class="comment-meta">
+                <span class="date">{{ formatDate(c.createdAt) }}</span>
+              </div>
+              <div class="comment-body">{{ c.content }}</div>
+            </li>
+          </ul>
+          <p v-else class="state">No comments yet</p>
+          <div v-if="auth.user" class="comment-form">
+            <label class="field">
+              <span>Add a comment</span>
+              <textarea v-model.trim="newComment" rows="3" maxlength="5000" placeholder="Write your comment…"></textarea>
+            </label>
+            <div class="actions">
+              <button class="btn outline" type="button" @click="submitComment" :disabled="!newComment.trim()">Post comment</button>
+            </div>
+          </div>
+          <div v-else class="state">Sign in to add a comment</div>
+        </section>
       </template>
+
       <!-- Редактирование -->
       <template v-else>
         <h1 class="title">Edit post</h1>
@@ -114,7 +140,12 @@ const form = ref({
   status: 'draft',
   tagsText: '',
 })
+const comments = ref([])
+const commentsLoading = ref(false)
+const commentsError = ref('')
+const newComment = ref('')
 
+const isPublished = computed(() => post.value?.status === 'published')
 function formatDate(d) {
   const date = new Date(d)
   return date.toLocaleString()
@@ -242,7 +273,51 @@ async function onDelete() {
     busy.value = false
   }
 }
-onMounted(load)
+// Комментарии
+async function loadComments() {
+  commentsLoading.value = true
+  commentsError.value = ''
+  try {
+    const res = await fetch(`/api/posts/${id}/comments`, { credentials: 'include' })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      commentsError.value = data?.message || 'Failed to load comments'
+      comments.value = []
+    } else {
+      comments.value = Array.isArray(data?.items) ? data.items : []
+    }
+  } catch (e) {
+    commentsError.value = 'Failed to load comments'
+    comments.value = []
+  } finally {
+    commentsLoading.value = false
+  }
+}
+
+async function submitComment() {
+  if (!auth.user || !isPublished.value) return
+  const body = (newComment.value || '').trim()
+  if (!body) return
+  const res = await fetch(`/api/posts/${id}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ content: body }),
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    alert(data?.message || 'Failed to add comment')
+    return
+  }
+  comments.value.push(data)
+  newComment.value = ''
+}
+
+onMounted(async () => {
+  await load()
+  await loadComments()
+})
+
 </script>
 
 <style scoped>
@@ -275,6 +350,10 @@ onMounted(load)
   border-radius: 4px;
   cursor: pointer;
   text-decoration: none;
+  transition: background .2s ease-in-out;
+}
+.btn:hover {
+  background: #2a9d6f;
 }
 .btn.outline {
   background: transparent;
@@ -373,6 +452,44 @@ pre.plain {
 textarea { resize: vertical; }
 .actions {
   display: flex;
+  gap: .5rem;
+}
+.comments {
+  margin-top: 2rem;
+}
+.comments h3 {
+  margin-top: 0;
+}
+.comments .state {
+  margin-bottom: 1rem;
+}
+.comment {
+  list-style: none;
+  margin: .5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+.comment-item {
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: .75rem;
+  background: #fff;
+}
+.comment-meta {
+  font-size: .875rem;
+  color: #777;
+  margin-bottom: .25rem;
+}
+.comment-body {
+  white-space: pre-wrap;
+  color: #1a1a1a;
+}
+.comment-form {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
   gap: .5rem;
 }
 </style>

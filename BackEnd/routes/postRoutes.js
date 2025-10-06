@@ -1,5 +1,6 @@
 import express from 'express'
 import mongoose from 'mongoose'
+import Comment from '../models/Comment.js'
 import Post from '../models/Post.js'
 import {verifyToken} from '../middleware/verifyToken.js'
 import { optionalVerifyToken } from '../middleware/optionalVerifyToken.js'
@@ -153,6 +154,62 @@ router.delete('/:id', verifyToken, async (req, res) => {
     } catch (err) {
         console.error(err)
         res.status(500).json({ message: 'Failed to delete post' })
+    }
+})
+
+// Список комментариев к посту (публично, но только для опубликованных постов)
+router.get('/:id/comments', async (req, res) => {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ message: 'Invalid post id' })
+    }
+
+    const post = await Post.findById(id).select('status').lean()
+    if (!post) return res.status(404).json({ message: 'Post not found' })
+
+    if (post.status !== 'published') {
+        return res.status(403).json({ message: 'Post is not public' })
+    }
+
+    const comments = await Comment.find({ postId: id })
+        .sort({ createdAt: 1 })
+        .lean()
+
+    res.json({ items: comments })
+})
+// Создать комментарий (только авторизованным) к опубликованному посту
+router.post('/:id/comments', verifyToken, async (req, res) => {
+    try {
+        const { id } = req.params
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: 'Invalid post id' })
+        }
+
+        const post = await Post.findById(id).select('status')
+        if (!post) return res.status(404).json({ message: 'Post not found' })
+
+        if (post.status !== 'published') {
+            return res.status(403).json({ message: 'Post is not public' })
+        }
+
+        const content = (req.body?.content || '').trim()
+        if (!content) {
+            return res.status(400).json({ message: 'Content is required' })
+        }
+
+        const comment = await Comment.create({
+            postId: id,
+            userId: req.user.sub,
+            content,
+        })
+
+        res.status(201).json(comment)
+    } catch (err) {
+        console.error(err)
+        if (err?.name === 'ValidationError') {
+            return res.status(400).json({ message: 'Validation error', errors: err.errors })
+        }
+        res.status(500).json({ message: 'Failed to add comment' })
     }
 })
 export default router
