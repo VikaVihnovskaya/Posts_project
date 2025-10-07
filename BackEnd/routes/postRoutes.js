@@ -170,11 +170,14 @@ router.get('/:id/comments', async (req, res) => {
     if (post.status !== 'published') {
         return res.status(403).json({ message: 'Post is not public' })
     }
-
-    const comments = await Comment.find({ postId: id })
+    const raw = await Comment.find({ postId: id })
         .sort({ createdAt: 1 })
+        .populate('userId', 'login') // тянем логин автора
         .lean()
-
+    const comments = raw.map(c => ({
+        ...c,
+        author: c.userId?.login || 'Unknown',
+    }))
     res.json({ items: comments })
 })
 // Создать комментарий (только авторизованным) к опубликованному посту
@@ -197,13 +200,21 @@ router.post('/:id/comments', verifyToken, async (req, res) => {
             return res.status(400).json({ message: 'Content is required' })
         }
 
-        const comment = await Comment.create({
+        const created = await Comment.create({
             postId: id,
             userId: req.user.sub,
             content,
         })
+        // Возвращаем комментарий с автором (login)
+        const c = await Comment.findById(created._id)
+            .populate('userId', 'login')
+            .lean()
 
-        res.status(201).json(comment)
+        const response = {
+            ...c,
+            author: c.userId?.login || 'Unknown',
+        }
+        res.status(201).json(response)
     } catch (err) {
         console.error(err)
         if (err?.name === 'ValidationError') {

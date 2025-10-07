@@ -53,7 +53,10 @@
           <ul v-else-if="comments.length" class="comment">
             <li v-for="c in comments" :key="c._id" class="comment-item">
               <div class="comment-meta">
-                <span class="date">{{ formatDate(c.createdAt) }}</span>
+                <span class="date">
+                  <strong class="author">{{ c._author || c.author || 'Unknown' }}</strong>
+                  • {{ formatDate(c.createdAt) }}
+                </span>
               </div>
               <div class="comment-body">{{ c.content }}</div>
             </li>
@@ -62,13 +65,16 @@
           <div v-if="auth.user" class="comment-form">
             <label class="field">
               <span>Add a comment</span>
-              <textarea v-model.trim="newComment" rows="3" maxlength="5000" placeholder="Write your comment…"></textarea>
+              <textarea v-model.trim="newComment" rows="3" maxlength="5000"
+                        placeholder="Write your comment…"></textarea>
             </label>
             <div class="actions">
-              <button class="btn outline" type="button" @click="submitComment" :disabled="!newComment.trim()">Post comment</button>
+              <button class="btn outline" type="button" @click="submitComment" :disabled="!newComment.trim()">Post
+                comment
+              </button>
             </div>
           </div>
-          <div v-else class="state">Sign in to add a comment</div>
+          <div v-else class="state">Log in to add a comment</div>
         </section>
       </template>
 
@@ -78,7 +84,7 @@
         <form class="edit-form" @submit.prevent="onSave">
           <label class="field">
             <span>Title</span>
-            <input v-model.trim="form.title" type="text" required minlength="3" maxlength="200" />
+            <input v-model.trim="form.title" type="text" required minlength="3" maxlength="200"/>
           </label>
 
           <label class="field">
@@ -102,10 +108,10 @@
 
           <label class="field">
             <span>Tags (comma-separated)</span>
-            <input v-model.trim="form.tagsText" type="text" placeholder="Enter new tags" />
+            <input v-model.trim="form.tagsText" type="text" placeholder="Enter new tags"/>
           </label>
           <!-- Категории пока не редактируем, но отправим текущие названия, если есть -->
-<!--          <div class="hint">Categories are preserved as is.</div>-->
+          <!--          <div class="hint">Categories are preserved as is.</div>-->
           <div class="actions">
             <button class="btn" type="submit" :disabled="busy">Save</button>
             <button class="btn outline" type="button" @click="cancelEdit" :disabled="busy">Cancel</button>
@@ -117,8 +123,8 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import {onMounted, ref, computed} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
 import {useAuthStore} from "../stores/auth.js"
 
 const route = useRoute()
@@ -146,6 +152,7 @@ const commentsError = ref('')
 const newComment = ref('')
 
 const isPublished = computed(() => post.value?.status === 'published')
+
 function formatDate(d) {
   const date = new Date(d)
   return date.toLocaleString()
@@ -170,29 +177,32 @@ async function load() {
   loading.value = true
   error.value = ''
   post.value = null
-    if (!auth.user) {
-      await auth.checkAuth().catch(() => {})
-    }
-    const res = await fetch(`/api/posts/${id}`, {
-      credentials: 'include',})
-    const data = await res.json().catch(() => null)
+  if (!auth.user) {
+    await auth.checkAuth().catch(() => {
+    })
+  }
+  const res = await fetch(`/api/posts/${id}`, {
+    credentials: 'include',
+  })
+  const data = await res.json().catch(() => null)
 
-    if (!res.ok) {
-      error.value =
-          res.status === 404
-              ? 'Post not found'
-              : res.status === 403
-                  ? 'Post is not public (draft or archived)'
-                  : data?.message || 'Failed to load post'
-      loading.value = false
-      return
-    }
-    post.value = data
-    if (post.value?.title) {
-      document.title = `${post.value.title} — Post`
-    }
+  if (!res.ok) {
+    error.value =
+        res.status === 404
+            ? 'Post not found'
+            : res.status === 403
+                ? 'Post is not public (draft or archived)'
+                : data?.message || 'Failed to load post'
     loading.value = false
+    return
+  }
+  post.value = data
+  if (post.value?.title) {
+    document.title = `${post.value.title} — Post`
+  }
+  loading.value = false
 }
+
 function startEdit() {
   if (!post.value) return
   editPost.value = true
@@ -222,33 +232,33 @@ async function onSave() {
   busy.value = true
   error.value = ''
 
-    const payload = {
-      title: form.value.title,
-      summary: form.value.summary,
-      details: form.value.details,
-      status: form.value.status,
-      tags: parseTags(form.value.tagsText),
-      // Сохраняем текущие категории (по именам), если они были пока так
-      categories: categoryNames.value,
-    }
+  const payload = {
+    title: form.value.title,
+    summary: form.value.summary,
+    details: form.value.details,
+    status: form.value.status,
+    tags: parseTags(form.value.tagsText),
+    // Сохраняем текущие категории (по именам), если они были пока так
+    categories: categoryNames.value,
+  }
 
-    const res = await fetch(`/api/posts/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      credentials: 'include',
-    })
+  const res = await fetch(`/api/posts/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+    credentials: 'include',
+  })
 
-    const data = await res.json().catch(() => null)
+  const data = await res.json().catch(() => null)
 
-    if (!res.ok) {
-      error.value = data?.message || 'Failed to update post'
-      busy.value = false
-      return
-    }
-    post.value = data
-    editPost.value = false
+  if (!res.ok) {
+    error.value = data?.message || 'Failed to update post'
     busy.value = false
+    return
+  }
+  post.value = data
+  editPost.value = false
+  busy.value = false
 }
 
 async function onDelete() {
@@ -273,18 +283,23 @@ async function onDelete() {
     busy.value = false
   }
 }
+
 // Комментарии
 async function loadComments() {
   commentsLoading.value = true
   commentsError.value = ''
   try {
-    const res = await fetch(`/api/posts/${id}/comments`, { credentials: 'include' })
+    const res = await fetch(`/api/posts/${id}/comments`, {credentials: 'include'})
     const data = await res.json().catch(() => null)
     if (!res.ok) {
       commentsError.value = data?.message || 'Failed to load comments'
       comments.value = []
     } else {
-      comments.value = Array.isArray(data?.items) ? data.items : []
+      const items = Array.isArray(data?.items) ? data.items : []
+      comments.value = items.map(c => ({
+        ...c,
+        _author: c.author || c.userId?.login || 'Unknown',
+      }))
     }
   } catch (e) {
     commentsError.value = 'Failed to load comments'
@@ -300,16 +315,20 @@ async function submitComment() {
   if (!body) return
   const res = await fetch(`/api/posts/${id}/comments`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {'Content-Type': 'application/json'},
     credentials: 'include',
-    body: JSON.stringify({ content: body }),
+    body: JSON.stringify({content: body}),
   })
   const data = await res.json().catch(() => null)
   if (!res.ok) {
     alert(data?.message || 'Failed to add comment')
     return
   }
-  comments.value.push(data)
+  const normalized = {
+    ...data,
+    _author: data.author || data.userId?.login || 'Unknown',
+  }
+  comments.value.push(normalized)
   newComment.value = ''
 }
 
@@ -330,11 +349,13 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
 }
+
 .post-view.editing {
   max-width: 1280px;
   margin: 1rem auto;
   padding: 2rem 1rem;
 }
+
 .topbar {
   display: flex;
   align-items: center;
@@ -352,51 +373,65 @@ onMounted(async () => {
   text-decoration: none;
   transition: background .2s ease-in-out;
 }
+
 .btn:hover {
   background: #2a9d6f;
 }
+
 .btn.outline {
   background: transparent;
   color: #2a9d6f;
   border: 1px solid #2a9d6f;
 }
+
 .btn.outline:hover {
   background: #2a9d6f;
   color: #fff;
 }
+
 .btn.outline.danger {
   color: #b00020;
   border-color: #b00020;
 }
+
 .btn.outline.danger:hover {
   background: #b00020;
   color: #fff;
 }
+
 .owner-actions {
   display: flex;
   gap: .5rem;
 }
+
 .state {
   color: #666;
+  margin-top: 1rem;
 }
+
 .state.error {
   color: #b00020;
 }
+
 .post .title {
   margin: 0 0 .25rem;
 }
+
 .meta {
   color: #777;
   margin-bottom: .75rem;
 }
+
 .summary {
   font-style: italic;
   white-space: pre-wrap;
 }
+
 .details {
   margin-top: 1rem;
   color: #1a1a1a
 }
+
 pre.plain {
   white-space: pre-wrap;
   font-family: inherit;
@@ -405,16 +440,20 @@ pre.plain {
   padding: .75rem;
   border-radius: 6px;
 }
+
 .row {
   margin-top: .75rem;
 }
+
 .inline-list {
   list-style: none;
-  margin: 0; padding: 0;
+  margin: 0;
+  padding: 0;
   display: inline-flex;
   gap: .5rem;
   flex-wrap: wrap;
 }
+
 .banner.warn {
   background: #fff3cd;
   color: #8a6d3b;
@@ -423,6 +462,7 @@ pre.plain {
   border-radius: 6px;
   margin-bottom: .75rem;
 }
+
 .edit-form {
   margin: 0;
   width: 100%;
@@ -432,6 +472,7 @@ pre.plain {
   gap: 1rem;
   box-sizing: border-box;
 }
+
 .field {
   display: flex;
   flex-direction: column;
@@ -441,6 +482,7 @@ pre.plain {
 .field > span {
   font-weight: 800;
 }
+
 .field input, .field textarea, .field select {
   box-sizing: border-box;
   width: 100%;
@@ -449,20 +491,28 @@ pre.plain {
   border-radius: 6px;
   font-size: 1rem;
 }
-textarea { resize: vertical; }
+
+textarea {
+  resize: vertical;
+}
+
 .actions {
   display: flex;
   gap: .5rem;
 }
+
 .comments {
   margin-top: 2rem;
 }
+
 .comments h3 {
   margin-top: 0;
 }
+
 .comments .state {
   margin-bottom: 1rem;
 }
+
 .comment {
   list-style: none;
   margin: .5rem 0 0;
@@ -471,21 +521,25 @@ textarea { resize: vertical; }
   flex-direction: column;
   gap: .75rem;
 }
+
 .comment-item {
   border: 1px solid #eee;
   border-radius: 6px;
   padding: .75rem;
   background: #fff;
 }
+
 .comment-meta {
   font-size: .875rem;
   color: #777;
   margin-bottom: .25rem;
 }
+
 .comment-body {
   white-space: pre-wrap;
   color: #1a1a1a;
 }
+
 .comment-form {
   margin-top: 1rem;
   display: flex;
