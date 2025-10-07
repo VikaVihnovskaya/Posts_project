@@ -163,7 +163,6 @@ router.get('/:id/comments', async (req, res) => {
     if (!mongoose.isValidObjectId(id)) {
         return res.status(400).json({ message: 'Invalid post id' })
     }
-
     const post = await Post.findById(id).select('status').lean()
     if (!post) return res.status(404).json({ message: 'Post not found' })
 
@@ -194,7 +193,6 @@ router.post('/:id/comments', verifyToken, async (req, res) => {
         if (post.status !== 'published') {
             return res.status(403).json({ message: 'Post is not public' })
         }
-
         const content = (req.body?.content || '').trim()
         if (!content) {
             return res.status(400).json({ message: 'Content is required' })
@@ -221,6 +219,67 @@ router.post('/:id/comments', verifyToken, async (req, res) => {
             return res.status(400).json({ message: 'Validation error', errors: err.errors })
         }
         res.status(500).json({ message: 'Failed to add comment' })
+    }
+})
+// Обновить свой комментарий к опубликованному посту
+router.put('/:postId/comments/:commentId', verifyToken, async (req, res) => {
+    try {
+        const { postId, commentId } = req.params
+        if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
+            return res.status(400).json({ message: 'Invalid id' })
+        }
+
+        const post = await Post.findById(postId).select('status')
+        if (!post) return res.status(404).json({ message: 'Post not found' })
+        if (post.status !== 'published') {
+            return res.status(403).json({ message: 'Post is not public' })
+        }
+
+        const content = (req.body?.content || '').trim()
+        if (!content) return res.status(400).json({ message: 'Content is required' })
+
+        // Находим комментарий, который принадлежит текущему пользователю
+        const comment = await Comment.findOne({ _id: commentId, postId, userId: req.user.sub })
+        if (!comment) return res.status(404).json({ message: 'Comment not found' })
+
+        comment.content = content
+        await comment.save()
+
+        const c = await Comment.findById(comment._id).populate('userId', 'login').lean()
+        const response = { ...c, author: c.userId?.login || 'Unknown' }
+        res.json(response)
+    } catch (err) {
+        console.error(err)
+        if (err?.name === 'ValidationError') {
+            return res.status(400).json({ message: 'Validation error', errors: err.errors })
+        }
+        res.status(500).json({ message: 'Failed to update comment' })
+    }
+})
+
+// Удалить свой комментарий к опубликованному посту
+router.delete('/:postId/comments/:commentId', verifyToken, async (req, res) => {
+    try {
+        const { postId, commentId } = req.params
+        if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
+            return res.status(400).json({ message: 'Invalid id' })
+        }
+
+        const post = await Post.findById(postId).select('status')
+        if (!post) return res.status(404).json({ message: 'Post not found' })
+        if (post.status !== 'published') {
+            return res.status(403).json({ message: 'Post is not public' })
+        }
+
+        const result = await Comment.deleteOne({ _id: commentId, postId, userId: req.user.sub })
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ message: 'Comment not found' })
+        }
+
+        return res.status(204).send()
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ message: 'Failed to delete comment' })
     }
 })
 export default router

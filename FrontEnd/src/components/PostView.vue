@@ -57,8 +57,21 @@
                   <strong class="author">{{ c._author || c.author || 'Unknown' }}</strong>
                   • {{ formatDate(c.createdAt) }}
                 </span>
+                <span v-if="auth.user && canEditComment(c)" class="comment-actions">
+                  <button class="btn outline" type="button" @click="startEditComment(c)" v-if="editingCommentId !== c._id">Edit</button>
+                  <button class="btn outline danger" type="button" @click="deleteComment(c)" :disabled="editingCommentId === c._id">Delete</button>
+                </span>
               </div>
-              <div class="comment-body">{{ c.content }}</div>
+
+              <div v-if="editingCommentId === c._id" class="comment-edit">
+                <textarea v-model.trim="editingText" rows="3" maxlength="5000"></textarea>
+                <div class="actions">
+                  <button class="btn" type="button" @click="saveEditComment(c)" :disabled="!editingText.trim()">Save
+                  </button>
+                  <button class="btn outline" type="button" @click="cancelEditComment">Cancel</button>
+                </div>
+              </div>
+              <div v-else class="comment-body">{{ c.content }}</div>
             </li>
           </ul>
           <p v-else class="state">No comments yet</p>
@@ -150,6 +163,8 @@ const comments = ref([])
 const commentsLoading = ref(false)
 const commentsError = ref('')
 const newComment = ref('')
+const editingCommentId = ref(null)
+const editingText = ref('')
 
 const isPublished = computed(() => post.value?.status === 'published')
 
@@ -330,6 +345,65 @@ async function submitComment() {
   }
   comments.value.push(normalized)
   newComment.value = ''
+}
+
+function canEditComment(c) {
+  const currentUserID = currentUserId.value
+  const commentAuthorID = c?.userId?._id || c?.userId
+  return !!currentUserID && String(currentUserID) === String(commentAuthorID)
+}
+
+function startEditComment(c) {
+  if (!canEditComment(c)) return
+  editingCommentId.value = c._id
+  editingText.value = c.content
+}
+
+function cancelEditComment() {
+  editingCommentId.value = null
+  editingText.value = ''
+}
+
+async function saveEditComment(c) {
+  if (!canEditComment(c)) return
+  const body = (editingText.value || '').trim()
+  if (!body) return
+  const res = await fetch(`/api/posts/${id}/comments/${c._id}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({content: body}),
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    alert(data?.message || 'Failed to update comment')
+    return
+  }
+  // Обновляем локально массив комментариев
+  const index = comments.value.findIndex(x => x._id === c._id)
+  if (index !== -1) {
+    comments.value[index] = {
+      ...comments.value[index],
+      ...data,
+      _author: data.author || data.userId?.login || comments.value[index]._author,
+    }
+  }
+  cancelEditComment()
+}
+
+async function deleteComment(c) {
+  if (!canEditComment(c)) return
+  if (!confirm('Delete this comment?')) return
+  const res = await fetch(`/api/posts/${id}/comments/${c._id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!res.ok && res.status !== 204) {
+    const data = await res.json().catch(() => null)
+    alert(data?.message || 'Failed to delete comment')
+    return
+  }
+  comments.value = comments.value.filter(x => x._id !== c._id)
 }
 
 onMounted(async () => {
@@ -530,6 +604,9 @@ textarea {
 }
 
 .comment-meta {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
   font-size: .875rem;
   color: #777;
   margin-bottom: .25rem;
@@ -542,6 +619,17 @@ textarea {
 
 .comment-form {
   margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.comment-actions {
+  float: right;
+  display: flex;
+  gap: .5rem;
+}
+.comment-edit {
+  margin-top: .5rem;
   display: flex;
   flex-direction: column;
   gap: .5rem;
