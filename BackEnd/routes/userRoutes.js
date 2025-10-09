@@ -6,7 +6,7 @@ import {verifyToken} from "../middleware/verifyToken.js";
 
 const router = express.Router();
 // POST /api/users/create → создание пользователя
-router.post("/create", async (req, res) => {
+router.post("/create", async (req, res, next) => {
     try {
         const {login, password} = req.body;
 
@@ -33,12 +33,11 @@ router.post("/create", async (req, res) => {
             user: { id: user.id, login: user.login }
         });
     } catch (error) {
-        console.error("Error creating user:", error);
-        res.status(500).json({message: "Internal server error"});
+       next(err)
     }
 });
 //  POST /api/users/login (авторизация и установка cookie)
-router.post("/login", async (req, res) => {
+router.post("/login", async (req, res, next ) => {
     try {
         const {login, password} = req.body;
 
@@ -73,8 +72,7 @@ router.post("/login", async (req, res) => {
         });
         res.status(200).json({message: "User login to system successfully"});
     } catch (error) {
-        console.error("Error is occurred during login:", error);
-        res.status(500).json({message: "Internal server error"});
+       next(err)
     }
 });
 // POST /api/users/logout → удаление токена из cookie
@@ -86,7 +84,7 @@ router.post("/logout", (req, res) => {
     res.status(200).json({ message: "Logged out successfully" });
 });
 // GET/api/users Получить всех юзеров(только авторизованным)
-router.get("/", verifyToken, async (req, res) => {
+router.get("/", verifyToken, async (req, res, next ) => {
     try {
         const allUsers = await User.find();
 
@@ -99,8 +97,7 @@ router.get("/", verifyToken, async (req, res) => {
         );
         res.status(200).json({usersDetails});
     } catch (error) {
-        console.error("Error fetching users details:", error);
-        res.status(500).json({message: "Internal server error"});
+        next(err)
     }
 });
 

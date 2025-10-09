@@ -1,7 +1,10 @@
 import express from 'express'
-import mongoose from 'mongoose'
 import Comment from '../models/Comment.js'
 import Post from '../models/Post.js'
+import {checkPostOwner} from "../middleware/checkPostOwner.js";
+import {validateCommentContent} from "../middleware/validateCommentContent.js";
+import {validateObjectId} from "../middleware/validateObjectId.js";
+import {validatePublishedPost} from "../middleware/validatePublishedPost.js";
 import {verifyToken} from '../middleware/verifyToken.js'
 import { optionalVerifyToken } from '../middleware/optionalVerifyToken.js'
 import Category from "../models/Category.js";
@@ -21,7 +24,7 @@ function reconcilePublishFields(doc) {
     }
 }
 //GET / — список постов (публичный + собственные непубличные для владельца)
-router.get('/', optionalVerifyToken, async (req, res) => {
+router.get('/', optionalVerifyToken, async (req, res, next) => {
     try {
         const { limit, page } = parsePaging(req)
         let filter = { status: 'published' }
@@ -43,16 +46,14 @@ router.get('/', optionalVerifyToken, async (req, res) => {
         ])
         res.json({ items, page, limit, total })
     } catch (err){
-        console.error(err)
-        res.status(500).json({ message: 'Failed to load posts' })
+        next(err)
     }
 })
 
 
 // GET /:id — получить один пост (публичный)
-router.get('/:id', optionalVerifyToken, async (req, res) => {
+router.get('/:id', optionalVerifyToken, validateObjectId('id'), async (req, res) => {
     const { id } = req.params
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid post id' })
     const post = await Post.findById(id).populate('categories', 'name').lean()
     if (!post) return res.status(404).json({ message: 'Post not found' })
 
@@ -65,7 +66,7 @@ router.get('/:id', optionalVerifyToken, async (req, res) => {
 })
 
 // POST api/posts/create — создать пост (ТОЛЬКО авторизованным, через verifyToken)
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', verifyToken, async (req, res, next) => {
     try {
         const { title, summary, details, author, status, categories, tags } = req.body
 
@@ -85,33 +86,19 @@ router.post('/', verifyToken, async (req, res) => {
         await doc.save()
         res.status(201).json(doc)
     } catch (err) {
-        console.error(err)
-        if (err?.name === 'ValidationError') {
-            return res.status(400).json({ message: 'Validation error', errors: err.errors })
-        }
-        res.status(500).json({ message: 'Failed to create post' })
+        next(err)
     }
 })
 
 // PUT/:id — редактировать свой пост (ТОЛЬКО авторизованным)
-router.put('/:id', verifyToken, async (req, res) => {
+router.put('/:id',
+    verifyToken,
+    validateObjectId('id'),
+    checkPostOwner,
+    async (req, res, next) => {
     try {
-        const { id } = req.params
-        if (!mongoose.isValidObjectId(id)) {
-            return res.status(400).json({ message: 'Invalid post ID' })
-        }
-        const post = await Post.findById(id)
-
-        if (!post) {
-            return res.status(404).json({ message: 'Post not found' })
-        }
-        // Проверка прав — текущий пользователь должен быть владельцем поста
-        if (String(post.userId) !== req.user.sub) {
-            return res.status(403).json({ message: 'You are not allowed to edit this post' })
-        }
-        // Обновляем поля
+        const post = req.post
         const { title, summary, details, status, categories, tags } = req.body
-
         if (title !== undefined) post.title = title
         if (summary !== undefined) post.summary = summary
         if (details !== undefined) post.details = details
@@ -127,48 +114,27 @@ router.put('/:id', verifyToken, async (req, res) => {
         await post.save()
         res.json(post)
     } catch (err) {
-        console.error(err)
-        if (err?.name === 'ValidationError') {
-            return res.status(400).json({ message: 'Validation error', errors: err.errors })
-        }
-        res.status(500).json({ message: 'Failed to update post' })
+        next(err)
     }
 })
 
 // DELETE /:id — удалить свой пост (ТОЛЬКО авторизованным)
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id',
+    verifyToken,
+    validateObjectId('id'),
+    checkPostOwner,
+    async (req, res, next) => {
     try {
-        const { id } = req.params
-        if (!mongoose.isValidObjectId(id))
-            return res.status(400).json({ message: 'Invalid id' })
-
-        const post = await Post.findById(id)
-        if (!post)
-            return res.status(404).json({ message: 'Post not found' })
-
-        if (String(post.userId) !== String(req.user.sub)) {
-            return res.status(403).json({ message: 'Forbidden' })
-        }
         await Post.deleteOne({ _id: id })
         return res.status(204).send()
     } catch (err) {
-        console.error(err)
-        res.status(500).json({ message: 'Failed to delete post' })
+        next(err)
     }
 })
 
 // Список комментариев к посту (публично, но только для опубликованных постов)
-router.get('/:id/comments', async (req, res) => {
+router.get('/:id/comments', validatePublishedPost('id'), async (req, res) => {
     const { id } = req.params
-    if (!mongoose.isValidObjectId(id)) {
-        return res.status(400).json({ message: 'Invalid post id' })
-    }
-    const post = await Post.findById(id).select('status').lean()
-    if (!post) return res.status(404).json({ message: 'Post not found' })
-
-    if (post.status !== 'published') {
-        return res.status(403).json({ message: 'Post is not public' })
-    }
     const raw = await Comment.find({ postId: id })
         .sort({ createdAt: 1 })
         .populate('userId', 'login') // тянем логин автора
@@ -180,30 +146,16 @@ router.get('/:id/comments', async (req, res) => {
     res.json({ items: comments })
 })
 // Создать комментарий (только авторизованным) к опубликованному посту
-router.post('/:id/comments', verifyToken, async (req, res) => {
+router.post('/:id/comments',
+    verifyToken,
+    validatePublishedPost('id'),
+    validateCommentContent,
+    async (req, res, next) => {
     try {
         const { id } = req.params
-        if (!mongoose.isValidObjectId(id)) {
-            return res.status(400).json({ message: 'Invalid post id' })
-        }
-
-        const post = await Post.findById(id).select('status')
-        if (!post) return res.status(404).json({ message: 'Post not found' })
-
-        if (post.status !== 'published') {
-            return res.status(403).json({ message: 'Post is not public' })
-        }
-        const content = (req.body?.content || '').trim()
-        if (!content) {
-            return res.status(400).json({ message: 'Content is required' })
-        }
-
-        const created = await Comment.create({
-            postId: id,
-            userId: req.user.sub,
-            content,
+        const { content } = req.body
+        const created = await Comment.create({postId: id, userId: req.user.sub, content,
         })
-        // Возвращаем комментарий с автором (login)
         const c = await Comment.findById(created._id)
             .populate('userId', 'login')
             .lean()
@@ -214,31 +166,19 @@ router.post('/:id/comments', verifyToken, async (req, res) => {
         }
         res.status(201).json(response)
     } catch (err) {
-        console.error(err)
-        if (err?.name === 'ValidationError') {
-            return res.status(400).json({ message: 'Validation error', errors: err.errors })
-        }
-        res.status(500).json({ message: 'Failed to add comment' })
+        next(err)
     }
 })
 // Обновить свой комментарий к опубликованному посту
-router.put('/:postId/comments/:commentId', verifyToken, async (req, res) => {
+router.put('/:postId/comments/:commentId',
+    verifyToken,
+    validatePublishedPost('postId'),
+    validateObjectId('commentId'),
+    validateCommentContent,
+    async (req, res, next) => {
     try {
         const { postId, commentId } = req.params
-        if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
-            return res.status(400).json({ message: 'Invalid id' })
-        }
-
-        const post = await Post.findById(postId).select('status')
-        if (!post) return res.status(404).json({ message: 'Post not found' })
-        if (post.status !== 'published') {
-            return res.status(403).json({ message: 'Post is not public' })
-        }
-
-        const content = (req.body?.content || '').trim()
-        if (!content) return res.status(400).json({ message: 'Content is required' })
-
-        // Находим комментарий, который принадлежит текущему пользователю
+        const { content } = req.body
         const comment = await Comment.findOne({ _id: commentId, postId, userId: req.user.sub })
         if (!comment) return res.status(404).json({ message: 'Comment not found' })
 
@@ -249,28 +189,18 @@ router.put('/:postId/comments/:commentId', verifyToken, async (req, res) => {
         const response = { ...c, author: c.userId?.login || 'Unknown' }
         res.json(response)
     } catch (err) {
-        console.error(err)
-        if (err?.name === 'ValidationError') {
-            return res.status(400).json({ message: 'Validation error', errors: err.errors })
-        }
-        res.status(500).json({ message: 'Failed to update comment' })
+       next(err)
     }
 })
 
 // Удалить свой комментарий к опубликованному посту
-router.delete('/:postId/comments/:commentId', verifyToken, async (req, res) => {
+router.delete('/:postId/comments/:commentId',
+    verifyToken,
+    validatePublishedPost('postId'),
+    validateObjectId('commentId'),
+    async (req, res, next ) => {
     try {
         const { postId, commentId } = req.params
-        if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
-            return res.status(400).json({ message: 'Invalid id' })
-        }
-
-        const post = await Post.findById(postId).select('status')
-        if (!post) return res.status(404).json({ message: 'Post not found' })
-        if (post.status !== 'published') {
-            return res.status(403).json({ message: 'Post is not public' })
-        }
-
         const result = await Comment.deleteOne({ _id: commentId, postId, userId: req.user.sub })
         if (result.deletedCount === 0) {
             return res.status(404).json({ message: 'Comment not found' })
@@ -278,8 +208,8 @@ router.delete('/:postId/comments/:commentId', verifyToken, async (req, res) => {
 
         return res.status(204).send()
     } catch (err) {
-        console.error(err)
-        res.status(500).json({ message: 'Failed to delete comment' })
+       next(err)
     }
 })
+
 export default router
