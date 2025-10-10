@@ -29,11 +29,12 @@
 
 <script setup>
 import { ref } from 'vue'
-import router from '../router/index.js'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
-
+const route = useRoute()
+const router = useRouter()
 const login = ref('')
 const password = ref('')
 const message = ref('')
@@ -42,11 +43,8 @@ const isError = ref(false)
 const loginUser = async () => {
   const { ok, message: msg } = await auth.login({ login: login.value, password: password.value })
   if (ok) {
-    message.value = '✅ Logged in successfully!'
-    isError.value = false
-    login.value = ''
-    password.value = ''
-    router.push('/profile')
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
+    router.replace(redirect || '/profile')
   } else {
     message.value = '❌ ' + (msg || 'Login failed')
     isError.value = true

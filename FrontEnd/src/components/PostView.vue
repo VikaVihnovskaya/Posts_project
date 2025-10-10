@@ -87,7 +87,14 @@
               </button>
             </div>
           </div>
-          <div v-else class="state">Log in to add a comment</div>
+          <div v-else class="state">
+            <router-link
+                class="btn outline"
+                :to="{ name: 'LoginUser', query: { redirect: route.fullPath } }"
+            >
+              Log in to add a comment
+            </router-link>
+          </div>
         </section>
       </template>
 
@@ -325,6 +332,10 @@ async function loadComments() {
 }
 
 async function submitComment() {
+  if (!auth.user) {
+    router.push({ name: 'LoginUser', query: { redirect: route.fullPath } })
+    return
+  }
   if (!auth.user || !isPublished.value) return
   const body = (newComment.value || '').trim()
   if (!body) return

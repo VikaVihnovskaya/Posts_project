@@ -17,10 +17,11 @@ const router = createRouter({
 router.beforeEach(async (to) => {
     const auth = useAuthStore()
     if (to.meta.requiresAuth) {
-        // Если стор пустой, пробуем проверить сессию
         if (!auth.user) {
             const ok = await auth.checkAuth()
-            if (!ok) return '/login'
+            if (!ok) {
+                return { name: 'LoginUser', query: { redirect: to.fullPath } }
+            }
         }
     }
 })
