@@ -33,7 +33,7 @@ router.post("/create", async (req, res, next) => {
             message: "User created successfully",
             user: { id: user.id, login: user.login }
         });
-    } catch (error) {
+    } catch (err) {
        next(err)
     }
 });
@@ -72,7 +72,7 @@ router.post("/login", async (req, res, next ) => {
             maxAge: 1000 * 60 * 60 * 5 // 5 часов
         });
         res.status(200).json({message: "User login to system successfully"});
-    } catch (error) {
+    } catch (err) {
        next(err)
     }
 });
@@ -97,7 +97,7 @@ router.get("/", verifyToken, async (req, res, next ) => {
             }
         );
         res.status(200).json({usersDetails});
-    } catch (error) {
+    } catch (err) {
         next(err)
     }
 });
