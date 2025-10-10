@@ -26,26 +26,42 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
-
+const route = useRoute()
+const router = useRouter()
 const login = ref('')
 const password = ref('')
 const message = ref('')
 const isError = ref(false)
 
 const registerUser = async () => {
+  message.value = ''
+  isError.value = false
+  //  Регистрируем пользователя
   const { ok, message: msg } = await auth.register({ login: login.value, password: password.value })
-  if (ok) {
-    message.value = '✅ User registered successfully!'
-    isError.value = false
-    login.value = ''
-    password.value = ''
-  } else {
+  if (!ok) {
     message.value = '❌ ' + (msg || 'Registration failed')
     isError.value = true
+    return
   }
+  // Автоматический вход для установки cookie
+  const { ok: okLogin, message: loginMsg } = await auth.login({ login: login.value, password: password.value })
+  if (!okLogin) {
+    // Если авто‑логин не удался, можно попросить зайти вручную
+    message.value = 'ℹ️ Registered. Please log in: ' + (loginMsg || '')
+    isError.value = true
+    // Альтернатива: сразу отправить на страницу логина, сохранив redirect
+    // const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
+    // router.replace({ name: 'LoginUser', query: { redirect } })
+    return
+  }
+
+  //  Успех → возвращаемся по redirect или в профиль
+  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
+  router.replace(redirect || '/profile')
 }
 </script>
 
@@ -79,7 +95,7 @@ button {
 button:hover {
   background: #2a9d6f;
 }
-.error {
+.error{
   color: red;
 }
 .nav-link {

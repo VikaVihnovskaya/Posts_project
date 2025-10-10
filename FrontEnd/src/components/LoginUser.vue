@@ -1,7 +1,6 @@
 <template>
   <div class="login-user">
     <h2>Login</h2>
-
     <form @submit.prevent="loginUser">
       <div>
         <label for="login">Login:</label>
@@ -19,10 +18,9 @@
     <p v-if="message" :class="{ error: isError }">{{ message }}</p>
     <p class="nav-link">
       Don't have an account?
-      <router-link to="/register">Register</router-link>
-    </p>
-    <p class="nav-link">
-      <a href="#">Forgot your password?</a>
+      <router-link :to="{ name: 'RegisterUser', query: { redirect: route.query.redirect } }">
+        Register
+      </router-link>
     </p>
   </div>
 </template>

@@ -16,6 +16,10 @@ const router = createRouter({
 })
 router.beforeEach(async (to) => {
     const auth = useAuthStore()
+    // При первом заходе попробуем подтянуть сессию
+    if (!auth.user) {
+        await auth.checkAuth().catch(() => {})
+    }
     if (to.meta.requiresAuth) {
         if (!auth.user) {
             const ok = await auth.checkAuth()
@@ -23,6 +27,11 @@ router.beforeEach(async (to) => {
                 return { name: 'LoginUser', query: { redirect: to.fullPath } }
             }
         }
+    }
+    // Если уже авторизован и идёт на login/register — отправим на redirect || /profile
+    if ((to.name === 'LoginUser' || to.name === 'RegisterUser') && auth.user) {
+        const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : null
+        return { path: redirect || '/profile' }
     }
 })
 export default router
