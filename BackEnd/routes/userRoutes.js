@@ -2,6 +2,7 @@ import express from "express";
 import User from "../models/User.js";
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import {errorHandler} from "../middleware/errorHandler.js";
 import {verifyToken} from "../middleware/verifyToken.js";
 
 const router = express.Router();
@@ -108,5 +109,5 @@ router.get("/check", verifyToken, (req, res) => {
         login: req.user.login
     });
 });
-
+router.use(errorHandler)
 export default router;

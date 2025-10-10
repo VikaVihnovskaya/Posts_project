@@ -4,7 +4,6 @@ import mongoose from "mongoose";
 import bodyParser from "body-parser";
 import userRoutes from "./routes/userRoutes.js";
 import postRoutes from "./routes/postRoutes.js";
-import {errorHandler} from "./middleware/errorHandler.js";
 
 const app = express();
 const PORT = process.env.PORT;
@@ -20,7 +19,6 @@ app.use(cookieParser());
 // Подключение роутов
 app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
-app.use(errorHandler);
 
 // Подключение к MongoDB
 mongoose

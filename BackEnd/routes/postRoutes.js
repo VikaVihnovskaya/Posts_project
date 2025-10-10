@@ -1,6 +1,7 @@
 import express from 'express'
 import Comment from '../models/Comment.js'
 import Post from '../models/Post.js'
+import {errorHandler} from "../middleware/errorHandler.js";
 import {checkPostOwner} from "../middleware/checkPostOwner.js";
 import {validateCommentContent} from "../middleware/validateCommentContent.js";
 import {validateObjectId} from "../middleware/validateObjectId.js";
@@ -52,19 +53,22 @@ router.get('/', optionalVerifyToken, async (req, res, next) => {
 
 
 // GET /:id — получить один пост (публичный)
-router.get('/:id', optionalVerifyToken, validateObjectId('id'), async (req, res) => {
-    const { id } = req.params
-    const post = await Post.findById(id).populate('categories', 'name').lean()
-    if (!post) return res.status(404).json({ message: 'Post not found' })
+router.get('/:id', optionalVerifyToken, validateObjectId('id'), async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const post = await Post.findById(id).populate('categories', 'name').lean()
+        if (!post) return res.status(404).json({ message: 'Post not found' })
 
-    if (post.status !== 'published') {
-        if (!req.user || String(post.userId) !== String(req.user.sub)) {
-            return res.status(403).json({ message: 'Post is not public' })
+        if (post.status !== 'published') {
+            if (!req.user || String(post.userId) !== String(req.user.sub)) {
+                return res.status(403).json({ message: 'Post is not public' })
+            }
         }
+        res.json(post)
+    } catch (err) {
+        next(err)
     }
-    res.json(post)
 })
-
 // POST api/posts/create — создать пост (ТОЛЬКО авторизованным, через verifyToken)
 router.post('/', verifyToken, async (req, res, next) => {
     try {
@@ -117,7 +121,6 @@ router.put('/:id',
         next(err)
     }
 })
-
 // DELETE /:id — удалить свой пост (ТОЛЬКО авторизованным)
 router.delete('/:id',
     verifyToken,
@@ -125,7 +128,7 @@ router.delete('/:id',
     checkPostOwner,
     async (req, res, next) => {
     try {
-        await Post.deleteOne({ _id: id })
+        await Post.deleteOne({ _id: req.post._id })
         return res.status(204).send()
     } catch (err) {
         next(err)
@@ -133,17 +136,22 @@ router.delete('/:id',
 })
 
 // Список комментариев к посту (публично, но только для опубликованных постов)
-router.get('/:id/comments', validatePublishedPost('id'), async (req, res) => {
-    const { id } = req.params
-    const raw = await Comment.find({ postId: id })
-        .sort({ createdAt: 1 })
-        .populate('userId', 'login') // тянем логин автора
-        .lean()
-    const comments = raw.map(c => ({
-        ...c,
-        author: c.userId?.login || 'Unknown',
-    }))
-    res.json({ items: comments })
+router.get('/:id/comments', validatePublishedPost('id'), async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const raw = await Comment.find({ postId: id })
+            .sort({ createdAt: 1 })
+            .populate('userId', 'login') // тянем логин автора
+            .lean()
+        const comments = raw.map(c => ({
+            ...c,
+            author: c.userId?.login || 'Unknown',
+        }))
+        res.json({ items: comments })
+    } catch (err){
+        next(err)
+    }
+
 })
 // Создать комментарий (только авторизованным) к опубликованному посту
 router.post('/:id/comments',
@@ -159,7 +167,6 @@ router.post('/:id/comments',
         const c = await Comment.findById(created._id)
             .populate('userId', 'login')
             .lean()
-
         const response = {
             ...c,
             author: c.userId?.login || 'Unknown',
@@ -211,5 +218,5 @@ router.delete('/:postId/comments/:commentId',
        next(err)
     }
 })
-
+router.use(errorHandler)
 export default router
