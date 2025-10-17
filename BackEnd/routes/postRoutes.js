@@ -7,8 +7,19 @@ import {validateCommentContent} from "../middleware/validateCommentContent.js";
 import {validateObjectId} from "../middleware/validateObjectId.js";
 import {validatePublishedPost} from "../middleware/validatePublishedPost.js";
 import {verifyToken} from '../middleware/verifyToken.js'
-import { optionalVerifyToken } from '../middleware/optionalVerifyToken.js'
+import {optionalVerifyToken} from '../middleware/optionalVerifyToken.js'
 import Category from "../models/Category.js";
+import {buildPublicUrl, uploadBufferToS3} from '../utils/s3.js'
+import multer from 'multer'
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024, files: 10 },
+    fileFilter: (req, file, cb) => {
+        if (/^image\//.test(file.mimetype)) cb(null, true)
+        else cb(new Error('Only image files are allowed'))
+    },
+})
 
 const router = express.Router()
 function parsePaging(req) {
@@ -135,6 +146,79 @@ router.delete('/:id',
     }
 })
 
+// POST /api/posts/:id/images — загрузка одного или нескольких изображений к посту владельца
+router.post('/:id/images',
+    verifyToken,
+    validateObjectId('id'),
+    checkPostOwner,
+    upload.array('images', 10),
+    async (req, res, next) => {
+        try {
+            const s3 = req.app.locals.s3
+            const bucket = req.app.locals.s3Bucket
+            if (!s3) return res.status(500).json({ message: 'S3 not initialized' })
+
+            const post = req.post
+            if (!req.files || req.files.length === 0) {
+                return res.status(400).json({ message: 'No files uploaded' })
+            }
+
+            // Генерим префикс ключей: userId/postId/
+            const prefix = `${post.userId}/${post._id}/`
+
+            const newUrls = []
+            for (const file of req.files) {
+                // Можно добавить UUID к имени, чтобы избежать коллизий
+                const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+                // Сохраняем исходное расширение (если есть)
+                const ext = (file.originalname.match(/\.[a-zA-Z0-9]+$/) || [''])[0]
+                const key = `${prefix}${unique}${ext}`
+
+                await uploadBufferToS3({
+                    client: s3,
+                    bucket,
+                    key,
+                    buffer: file.buffer,
+                    contentType: file.mimetype,
+                })
+                const url = buildPublicUrl({ key, bucket })
+                newUrls.push(url)
+            }
+            // Дополняем документ
+            post.imageUrls = [...(post.imageUrls || []), ...newUrls]
+            await post.save()
+
+            res.status(201).json({ imageUrls: post.imageUrls })
+        } catch (err) {
+            next(err)
+        }
+    }
+)
+// DELETE /api/posts/:id/images — удалить одно или несколько изображений из поста (по URL)
+router.delete(
+    '/:id/images',
+    verifyToken,
+    validateObjectId('id'),
+    checkPostOwner,
+    async (req, res, next) => {
+        try {
+            const { urls } = req.body // массив строк URL
+            if (!Array.isArray(urls) || urls.length === 0) {
+                return res.status(400).json({ message: 'Provide "urls" array in body' })
+            }
+
+            const post = req.post
+            const before = post.imageUrls || []
+            post.imageUrls = before.filter(u => !urls.includes(u))
+            await post.save()
+
+            // Примечание: физическое удаление из S3 по желанию — можно добавить DeleteObject
+            res.json({ imageUrls: post.imageUrls })
+        } catch (err) {
+            next(err)
+        }
+    }
+)
 // Список комментариев к посту (публично, но только для опубликованных постов)
 router.get('/:id/comments', validatePublishedPost('id'), async (req, res, next) => {
     try {

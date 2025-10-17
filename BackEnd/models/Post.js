@@ -69,6 +69,10 @@ const postSchema = new mongoose.Schema({
             : v,
         index: true,
     },
+    imageUrls: {
+        type: [String],
+        default: [],
+    },
 }, {timestamps: true});
 
 export default mongoose.model("Post", postSchema)
