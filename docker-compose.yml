@@ -41,6 +41,7 @@ services:
       - S3_ACCESS_KEY=minio
       - S3_SECRET_KEY=miniopass
       - S3_BUCKET=posts
+      - S3_PUBLIC_URL=http://localhost:9002
       - PORT=3000
       - JWT_SECRET=6a5289834595741709b0d92f7c11289d
     depends_on:
