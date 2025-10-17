@@ -40,6 +40,7 @@ services:
       - S3_ENDPOINT=http://minio:9002
       - S3_ACCESS_KEY=minio
       - S3_SECRET_KEY=miniopass
+      - S3_BUCKET=posts
       - PORT=3000
       - JWT_SECRET=6a5289834595741709b0d92f7c11289d
     depends_on:
@@ -82,7 +83,7 @@ services:
   # =========================
   minio:
     image: minio/minio
-    command: server /data --console-address ":9001"
+    command: server /data --address ":9002" --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=minio
       - MINIO_ROOT_PASSWORD=miniopass
