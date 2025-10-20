@@ -32,7 +32,31 @@
         <div class="details" v-if="post.details">
           <pre class="plain">{{ post.details }}</pre>
         </div>
-
+        <!-- Изображения поста -->
+        <div v-if="post.imageUrls?.length" class="images">
+          <h3>Images</h3>
+          <div class="image-grid">
+            <div class="image-item" v-for="(url, i) in post.imageUrls" :key="i">
+              <img :src="url" alt="post image" />
+              <!-- Кнопка удаления только для владельца -->
+              <button
+                  v-if="isOwner"
+                  class="remove-btn"
+                  type="button"
+                  title="Remove image from post"
+                  @click="removeImage(url)"
+              >×</button>
+            </div>
+          </div>
+        </div>
+        <!-- Дозагрузка изображений — только для владельца -->
+        <div v-if="isOwner" class="upload-more">
+          <label class="field">
+            <span>Add images</span>
+            <input type="file" multiple accept="image/*" @change="uploadMore" :disabled="uploading" />
+          </label>
+          <p v-if="uploadError" class="state error">{{ uploadError }}</p>
+        </div>
         <div v-if="categoryNames.length" class="row">
           <strong>Categories:</strong>
           <ul class="inline-list">
@@ -155,6 +179,10 @@ const id = route.params.id
 const loading = ref(false)
 const error = ref('')
 const post = ref(null)
+
+const uploading = ref(false)
+const deleting = ref(false)
+const uploadError = ref('')
 
 const editPost = ref(false)
 const busy = ref(false)
@@ -416,6 +444,62 @@ async function deleteComment(c) {
   }
   comments.value = comments.value.filter(x => x._id !== c._id)
 }
+// Изображения
+// Загрузка одной или нескольких картинок владельцем поста
+async function uploadMore(e) {
+  const files = Array.from(e?.target?.files || [])
+  if (!files.length || !post.value?._id) return
+
+  uploading.value = true
+  uploadError.value = ''
+  try {
+    const fd = new FormData()
+    for (const f of files) fd.append('images', f)
+
+    const res = await fetch(`/api/posts/${post.value._id}/images`, {
+      method: 'POST',
+      body: fd,
+      credentials: 'include',
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      uploadError.value = data?.message || 'Failed to upload images'
+      return
+    }
+    // backend возвращает { imageUrls }
+    post.value.imageUrls = Array.isArray(data?.imageUrls) ? data.imageUrls : []
+  } catch (err) {
+    uploadError.value = 'Upload failed'
+  } finally {
+    uploading.value = false
+    // сброс input, чтобы можно было снова выбрать те же файлы
+    if (e?.target) e.target.value = ''
+  }
+}
+
+// Удаление одной картинки из поста (без физического удаления из S3
+async function removeImage(url) {
+  if (!isOwner.value || !post.value?._id) return
+  if (!confirm('Remove this image from the post?')) return
+
+  deleting.value = true
+  try {
+    const res = await fetch(`/api/posts/${post.value._id}/images`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ urls: [url] }),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      alert(data?.message || 'Failed to remove image')
+      return
+    }
+    post.value.imageUrls = Array.isArray(data?.imageUrls) ? data.imageUrls : []
+  } finally {
+    deleting.value = false
+  }
+}
 
 onMounted(async () => {
   await load()
@@ -645,4 +729,40 @@ textarea {
   flex-direction: column;
   gap: .5rem;
 }
+.images {
+  margin-top: 16px
+}
+.images h3 {
+  margin: 0 0 8px
+}
+.image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px
+}
+.image-item {
+  position: relative;
+  width: 240px;
+  max-width: 100%
+}
+.image-item img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  background: #fff
+}
+.remove-btn {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 28px; height: 28px;
+  border-radius: 50%; border: none;
+  background: rgba(176, 0, 32, .9);
+  color: #fff; font-size: 18px; line-height: 28px; text-align: center;
+  cursor: pointer;
+}
+.remove-btn:hover { background: #b00020 }
+
+.upload-more { margin-top: 10px }
 </style>
