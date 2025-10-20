@@ -15,14 +15,7 @@
     </header>
     <h1>Welcome to the list of posts! </h1>
     <section class="feed" v-if="items.length">
-      <article v-for="post in items" :key="post._id" class="post-card">
-        <router-link :to="{ name: 'PostView', params: { id: post._id } }" class="title-link">
-          <h3 class="title">{{ post.title }}</h3>
-        </router-link>
-        <p class="meta" v-if="post.publishedAt">Published: {{ formatDate(post.publishedAt) }}</p>
-        <p class="meta warn" v-else-if="isAuth && String(post.userId) === String(auth.user?.sub)">Draft — visible only to you</p>
-        <p class="summary">{{ post.summary }}</p>
-      </article>
+      <PostCard v-for="post in items" :key="post._id" :post="post" />
     </section>
 
     <section v-else class="empty">
@@ -41,6 +34,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import PostCard from './PostCard.vue'
 
 const auth = useAuthStore()
 const isAuth = computed(() => !!auth.user)
@@ -54,16 +48,13 @@ const limit = ref(10)
 const total = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)))
 
-function formatDate(d) {
-  const date = new Date(d)
-  return date.toLocaleString()
-}
-
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetch(`/api/posts?limit=${limit.value}&page=${page.value}, {credentials: 'include'}`)
+    const res = await fetch(`/api/posts?limit=${limit.value}&page=${page.value}`, {
+      credentials: 'include',
+    })
 
     if (!res.ok) {
       error.value = 'Failed to load posts'
@@ -95,7 +86,6 @@ function prevPage() {
 }
 async function onLogout() {
   await auth.logout()
-  // при желании можно перезагрузить ленту
   await load()
 }
 
@@ -152,40 +142,7 @@ watch(page, load)
   gap: .75rem;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
-.post-card {
-  min-height: 180px;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  padding: .75rem 1rem;
-  overflow: hidden;
-  transition: background .2s ease-in-out, box-shadow .2s ease-in-out;
-}
-.post-card:hover {
-  background: inherit;
-  opacity: 0.7;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-}
-.title {
-  margin: 0 0 .25rem 0;
-}
-.title-link {
-  color: inherit;
-  text-decoration: none;
-}
-.title-link:hover {
-  text-decoration: underline;
-}
-.meta {
-  color: forestgreen;
-  font-size: .9rem;
-  margin: 0 0 .5rem 0;
-}
-.meta.warn {
-  color: lightgreen;
-}
-.summary {
-  margin: 0;
-}
+
 .pager {
   display: flex;
   gap: .75rem;

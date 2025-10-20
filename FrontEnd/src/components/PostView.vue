@@ -690,14 +690,12 @@ textarea {
   flex-direction: column;
   gap: .75rem;
 }
-
 .comment-item {
   border: 1px solid #eee;
   border-radius: 6px;
   padding: .75rem;
   background: #fff;
 }
-
 .comment-meta {
   display: flex;
   flex-direction: row;
@@ -743,12 +741,16 @@ textarea {
 .image-item {
   position: relative;
   width: 240px;
-  max-width: 100%
+  max-width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+
 }
 .image-item img {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
   border-radius: 6px;
   border: 1px solid #eee;
   background: #fff
@@ -759,10 +761,16 @@ textarea {
   width: 28px; height: 28px;
   border-radius: 50%; border: none;
   background: rgba(176, 0, 32, .9);
-  color: #fff; font-size: 18px; line-height: 28px; text-align: center;
+  color: #fff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  padding: 0;
 }
-.remove-btn:hover { background: #b00020 }
-
+.remove-btn:hover {
+  background: #b00020
+}
 .upload-more { margin-top: 10px }
 </style>
