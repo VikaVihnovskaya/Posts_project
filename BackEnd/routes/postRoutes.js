@@ -9,7 +9,7 @@ import {validatePublishedPost} from "../middleware/validatePublishedPost.js";
 import {verifyToken} from '../middleware/verifyToken.js'
 import {optionalVerifyToken} from '../middleware/optionalVerifyToken.js'
 import Category from "../models/Category.js";
-import {buildPublicUrl, uploadBufferToS3} from '../utils/s3.js'
+import {buildPublicUrl, uploadBufferToS3, keyFromPublicUrl, deleteObjects } from '../utils/s3.js'
 import multer from 'multer'
 
 const upload = multer({
@@ -139,8 +139,25 @@ router.delete('/:id',
     checkPostOwner,
     async (req, res, next) => {
     try {
-        await Post.deleteOne({ _id: req.post._id })
-        return res.status(204).send()
+        const s3 = req.app.locals.s3
+        const bucket = req.app.locals.s3Bucket
+        const post = req.post
+            // Список ключей из URL-ов поста
+        const keys = (post.imageUrls || [])
+                 .map(u => keyFromPublicUrl(u, bucket))
+                 .filter(Boolean)
+
+            // Чистим MinIO (не прерываем удаление поста, если MinIO недоступен)
+               if (s3 && bucket && keys.length) {
+                  try {
+                      await deleteObjects({ client: s3, bucket, keys })
+                       } catch (e) {
+                        console.warn('MinIO cleanup failed for post', String(post._id), e)
+                      }
+                }
+
+                 await Post.deleteOne({ _id: post._id })
+            return res.status(204).send()
     } catch (err) {
         next(err)
     }
@@ -206,14 +223,30 @@ router.delete(
             if (!Array.isArray(urls) || urls.length === 0) {
                 return res.status(400).json({ message: 'Provide "urls" array in body' })
             }
-
+            const s3 = req.app.locals.s3
+            const bucket = req.app.locals.s3Bucket
             const post = req.post
-            const before = post.imageUrls || []
-            post.imageUrls = before.filter(u => !urls.includes(u))
-            await post.save()
+            // Удаляем только те URL, что реально есть у поста
+            const current = new Set(post.imageUrls || [])
+            const safeUrls = urls.filter(u => current.has(u))
 
-            // Примечание: физическое удаление из S3 по желанию — можно добавить DeleteObject
-            res.json({ imageUrls: post.imageUrls })
+            if (safeUrls.length && s3 && bucket) {
+                const keys = safeUrls.map(u => keyFromPublicUrl(u, bucket)).filter(Boolean)
+                if (keys.length) {
+                    try {
+                        await deleteObjects({ client: s3, bucket, keys })
+                    } catch (e) {
+                        console.warn('MinIO delete failed for images of post', String(post._id), e)
+                    }
+                }
+            }
+
+            // Синхронизируем БД: убираем URL-ы из документа
+            const before = post.imageUrls || []
+            post.imageUrls = before.filter(u => !safeUrls.includes(u))
+                 await post.save()
+                 res.json({ imageUrls: post.imageUrls })
+
         } catch (err) {
             next(err)
         }

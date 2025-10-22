@@ -4,6 +4,7 @@ import {
     HeadBucketCommand,
     PutBucketPolicyCommand,
     PutObjectCommand,
+    DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 
 // Создание клиента S3, совместимого с MinIO
@@ -77,4 +78,38 @@ export function buildPublicUrl({ key, bucket }) {
     const publicBase = process.env.S3_PUBLIC_URL || process.env.S3_ENDPOINT
     // Для MinIO с forcePathStyle=true путь вида http://host:port/bucket/key
     return `${publicBase.replace(/\/$/, '')}/${bucket}/${encodeURI(key)}`
+}
+export function keyFromPublicUrl(url, bucket) {
+    const bases = [process.env.S3_PUBLIC_URL, process.env.S3_ENDPOINT]
+        .filter(Boolean)
+        .map(b => b.replace(/\/$/, ''))
+    try {
+        const u = new URL(url)
+        for (const base of bases) {
+            const bu = new URL(base)
+            if (u.origin === bu.origin) {
+                // ожидаем путь вида /bucket/key...
+                const path = decodeURIComponent(u.pathname.replace(/^\/+/, ''))
+                const [bkt, ...rest] = path.split('/')
+                if (bkt === bucket) return rest.join('/') || null
+            }
+        }
+    } catch (_) { /* ignore */ }
+    return null
+}
+// Пакетное удаление объектов (чанками по 1000)
+export async function deleteObjects({ client, bucket, keys = [] }) {
+    const uniq = Array.from(new Set(keys.filter(Boolean)))
+    if (uniq.length === 0) return { ok: true, deleted: 0 }
+
+    let deleted = 0
+    for (let i = 0; i < uniq.length; i += 1000) {
+        const chunk = uniq.slice(i, i + 1000)
+        const res = await client.send(new DeleteObjectsCommand({
+            Bucket: bucket,
+            Delete: { Objects: chunk.map(Key => ({ Key })), Quiet: true },
+        }))
+        deleted += (res?.Deleted?.length || 0)
+    }
+    return { ok: true, deleted }
 }
