@@ -17,20 +17,19 @@ export async function getPostById(id) {
     return Post.findById(id).populate('categories', 'name').lean()
 }
 
-export async function createPost({ dto, userId }) {
-    const { title, summary, details, author, status, categories, tags } = dto
+export async function createPost({ data, userId }) {
+    const { title, summary, details, author, status, categories, tags } = data
     const obtainedCategories = await Category.find({ name: { $in: categories } })
-    const post = new Post({
+    return new Post({
         title, summary, details, author, status,
         categories: obtainedCategories,
         tags: Array.isArray(tags) ? tags : tags,
         userId,
     })
-    return post
 }
 
-export async function updatePostEntity(post, dto) {
-    const { title, summary, details, status, categories, tags } = dto
+export async function updatePostEntity(post, data) {
+    const { title, summary, details, status, categories, tags } = data
     if (title !== undefined) post.title = title
     if (summary !== undefined) post.summary = summary
     if (details !== undefined) post.details = details

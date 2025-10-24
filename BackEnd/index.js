@@ -52,7 +52,7 @@ async function start() {
         // 3) Readiness — проверка связности с БД и S3
         app.get("/health/ready", async (req, res) => {
             const mongoOk = mongoose.connection.readyState === 1; // 1 = connected
-            let s3Ok = false;
+            let s3Ok;
             try {
                 // Быстрая проверка S3: HeadBucket
                 await app.locals.s3.send(new (await import("@aws-sdk/client-s3")).HeadBucketCommand({ Bucket: S3_BUCKET }));

@@ -16,6 +16,23 @@ const userSchema = new mongoose.Schema({
         minlength: [6, "Password must be at least 6 characters long"],
         maxlength: [100, "Password must be less than 100 characters"],
     },
-});
+    name: {
+        type: String,
+        default: ""
+    },
+    email: {
+        type: String,
+        default: ""
+    },
+    about: {
+        type: String,
+        default: ""
+    },
+    avatarUrl: {
+        type: String,
+        default: ""
+    },
+}, { timestamps: true });
+
 
 export default mongoose.model("User", userSchema);
