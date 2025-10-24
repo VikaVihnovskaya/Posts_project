@@ -38,12 +38,9 @@
 <script setup>
 import { computed, reactive, ref, watchEffect } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { useRouter } from 'vue-router'
 
 const auth = useAuthStore()
-const router = useRouter()
 const user = computed(() => auth.user)
-
 const form = reactive({ name: '', email: '', about: '' })
 watchEffect(() => {
   form.name = user.value?.name || ''
@@ -105,7 +102,9 @@ async function saveUserProfile() {
   try {
     // 1) Загружаем аватар, если он выбран
     const avatarUploadResult = await uploadAvatarFile()
-    if (!avatarUploadResult.ok) throw new Error(avatarUploadResult.message)
+    if (!avatarUploadResult.ok) {
+      return { ok: false, message: avatarUploadResult.message }
+    }
 
     // 2) Сохраняем профиль
     const response = await fetch('/api/users', {
@@ -120,7 +119,9 @@ async function saveUserProfile() {
     })
 
     const responseData = await safeJson(response)
-    if (!response.ok) throw new Error(responseData?.message || 'Profile update failed')
+    if (!response.ok) {
+      return { ok: false, message: responseData?.message || 'Profile update failed' }
+    }
 
     auth.user = responseData
     alert('Profile saved')
