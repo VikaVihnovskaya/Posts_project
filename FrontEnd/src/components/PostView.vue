@@ -657,6 +657,8 @@ pre.plain {
   width: 100%;
   padding: .75rem;
   border: 1px solid #e5e5e5;
+  background: #dddddd;
+  color: #1a1a1a;
   border-radius: 6px;
   font-size: 1rem;
 }
@@ -691,7 +693,7 @@ textarea {
   gap: .75rem;
 }
 .comment-item {
-  border: 1px solid #eee;
+  border: 1px solid #1a1a1a;
   border-radius: 6px;
   padding: .75rem;
   background: #fff;

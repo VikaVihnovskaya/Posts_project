@@ -53,9 +53,6 @@ const registerUser = async () => {
     // Если авто‑логин не удался, можно попросить зайти вручную
     message.value = 'ℹ️ Registered. Please log in: ' + (loginMsg || '')
     isError.value = true
-    // Альтернатива: сразу отправить на страницу логина, сохранив redirect
-    // const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
-    // router.replace({ name: 'LoginUser', query: { redirect } })
     return
   }
 
@@ -72,6 +69,7 @@ const registerUser = async () => {
   padding: 1rem;
   border: 1px solid #ddd;
   border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 .register-user label {
   display: block;
@@ -101,5 +99,9 @@ button:hover {
 .nav-link {
   margin-top: 1rem;
   text-align: center;
+  text-decoration: none;
+}
+.nav-link a:hover {
+  text-decoration: underline;
 }
 </style>

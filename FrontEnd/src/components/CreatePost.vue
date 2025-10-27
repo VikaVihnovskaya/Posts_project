@@ -198,8 +198,8 @@ async function onSubmit() {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-
 }
+
 .field {
   display: flex;
   flex-direction: column;
@@ -210,6 +210,7 @@ async function onSubmit() {
   flex-direction: row;
   align-items: center;
   gap: 1rem;
+
 }
 .two-cols {
   display: grid;

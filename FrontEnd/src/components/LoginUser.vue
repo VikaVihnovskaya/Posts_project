@@ -55,8 +55,9 @@ const loginUser = async () => {
   max-width: 400px;
   margin: 1rem auto;
   padding: 1rem;
-  border: 1px solid #ddd;
+  border: 1px solid #ddd;;
   border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 .login-user label {
   display: block;
@@ -86,5 +87,9 @@ button:hover {
 .nav-link {
   margin-top: 0.5rem;
   text-align: center;
+  text-decoration: none;
+}
+.nav-link a:hover {
+  text-decoration: underline;
 }
 </style>
