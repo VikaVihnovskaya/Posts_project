@@ -31,14 +31,32 @@
           </div>
         </form>
       </div>
+      <h3>My Posts</h3>
+      <p class="subtitle">Your drafts and published posts</p>
+
+      <section v-if="myLoading" class="empty"><p>Loading…</p></section>
+      <section v-else>
+          <div v-if="myItems.length" class="feed">
+            <PostCard v-for="p in myItems" :key="p._id" :post="p" />
+          </div>
+          <div v-else class="empty">
+            <p>No posts yet</p>
+          </div>
+          <footer class="pager" v-if="myTotal > 0">
+            <button class="btn outline" :disabled="myPage === 0 || myLoading" @click="myPrev">Back</button>
+            <span>Page {{ myPage + 1 }} of {{ myTotalPages }}</span>
+            <button class="btn outline" :disabled="myPage >= myTotalPages - 1 || myLoading" @click="myNext">Next</button>
+          </footer>
+      </section>
+
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref, watchEffect } from 'vue'
+import { computed, reactive, ref, watchEffect, onMounted, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
-
+import PostCard from './PostCard.vue'
 const auth = useAuthStore()
 const user = computed(() => auth.user)
 const form = reactive({ name: '', email: '', about: '' })
@@ -53,6 +71,13 @@ const fileInput = ref(null)
 const avatarFile = ref(null)
 const avatarPreview = ref('')
 const placeholder = 'https://ui-avatars.com/api/?name=User&size=160'
+const myItems = ref([])
+const myLoading = ref(false)
+const myError = ref('')
+const myPage = ref(0)
+const myLimit = ref(10)
+const myTotal = ref(0)
+const myTotalPages = computed(() => Math.max(1, Math.ceil(myTotal.value / myLimit.value)))
 
 async function safeJson(res) {
   const contentType = res.headers.get('Content-Type') || ''
@@ -131,7 +156,41 @@ async function saveUserProfile() {
     saving.value = false
   }
 }
+async function loadMyPosts() {
+  myLoading.value = true
+  myError.value = ''
+  try {
+    const res = await fetch(`/api/posts?owner=me&limit=${myLimit.value}&page=${myPage.value}` , {
+      credentials: 'include',
+    })
+    if (!res.ok) {
+      myItems.value = []
+      myTotal.value = 0
+      myError.value = 'Failed to load my posts'
+      return
+    }
+    const data = await res.json()
+    myItems.value = Array.isArray(data.items) ? data.items : []
+    myTotal.value = data.total || 0
+  } catch (e) {
+    myItems.value = []
+    myTotal.value = 0
+    myError.value = e.message || 'Error'
+  } finally {
+    myLoading.value = false
+  }
+}
 
+function myNext() { if (myPage.value < myTotalPages.value - 1) myPage.value += 1 }
+function myPrev() { if (myPage.value > 0) myPage.value -= 1 }
+
+onMounted(async () => {
+  if (!auth.user) {
+    await auth.checkAuth()
+  }
+  await loadMyPosts()
+})
+watch(myPage, loadMyPosts)
 
 </script>
 
@@ -228,6 +287,22 @@ async function saveUserProfile() {
   display: flex;
   justify-content: end;
   margin-top: 16px;
+}
+.feed {
+  display: grid;
+  gap: .75rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+.pager {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1rem;
+}
+.empty {
+  text-align: center;
+  color: #666;
 }
 @media (max-width: 860px){
   .grid {

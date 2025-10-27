@@ -4,6 +4,14 @@ import { listPosts, getPostById, createPost, updatePostEntity, deletePostById } 
 
 export async function getPosts(req, res) {
     const { limit, page } = parsePaging(req)
+    const requestedOwner = req.query.owner
+    // если owner=me — показываем только посты текущего пользователя
+    if (requestedOwner === 'me') {
+        if (!req.user) return res.status(401).json({ message: 'Unauthorized' })
+        const { items, total } = await listPosts({ userId: req.user.sub, limit, page, ownerOnly: true })
+        return res.json({ items, page, limit, total })
+    }
+
     const userId = req.user?.sub || null
     const { items, total } = await listPosts({ userId, limit, page })
     res.json({ items, page, limit, total })
@@ -22,7 +30,7 @@ export async function getPost(req, res) {
 }
 
 export async function createPostCtrl(req, res) {
-    const post = await createPost({ dto: req.body, userId: req.user.sub })
+    const post = await createPost({ data: req.body, userId: req.user.sub })
     reconcilePublishFields(post)
     await post.save()
     res.status(201).json(post)

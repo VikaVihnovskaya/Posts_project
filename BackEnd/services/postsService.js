@@ -1,11 +1,19 @@
 import Post from '../models/Post.js'
 import Category from '../models/Category.js'
 
-export async function listPosts({ userId, limit, page }) {
-    let filter = { status: 'published' }
-    if (userId) {
-        filter = { $or: [ { status: 'published' }, { userId } ] }
+export async function listPosts({ userId, limit, page,ownerOnly = false }) {
+    let filter
+    if (ownerOnly) {
+        // Только посты владельца, включая черновики/архив
+        filter = { userId }
+    } else if (userId) {
+        // Для авторизованного: публичные + его собственные
+        filter = { $or: [{ status: 'published' }, { userId }] }
+    } else {
+        // Для неавторизованного: только публичные
+        filter = { status: 'published' }
     }
+
     const [items, total] = await Promise.all([
         Post.find(filter).sort({ publishedAt: -1, id: -1 }).limit(limit).skip(page * limit).lean(),
         Post.countDocuments(filter),
