@@ -5,10 +5,11 @@ import { listPosts, getPostById, createPost, updatePostEntity, deletePostById } 
 export async function getPosts(req, res) {
     const { limit, page } = parsePaging(req)
     const requestedOwner = req.query.owner
+    const requestedStatus = req.query.status // 'draft' | 'published' | undefined
     // если owner=me — показываем только посты текущего пользователя
     if (requestedOwner === 'me') {
         if (!req.user) return res.status(401).json({ message: 'Unauthorized' })
-        const { items, total } = await listPosts({ userId: req.user.sub, limit, page, ownerOnly: true })
+        const { items, total } = await listPosts({ userId: req.user.sub, limit, page, ownerOnly: true , status: requestedStatus,})
         return res.json({ items, page, limit, total })
     }
 

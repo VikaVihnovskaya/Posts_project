@@ -33,7 +33,15 @@
       </div>
       <h3>My Posts</h3>
       <p class="subtitle">Your drafts and published posts</p>
-
+      <div class="filters">
+        <label>Status:
+          <select v-model="myStatus">
+            <option value="all">All</option>
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+          </select>
+        </label>
+      </div>
       <section v-if="myLoading" class="empty"><p>Loading…</p></section>
       <section v-else>
           <div v-if="myItems.length" class="feed">
@@ -78,6 +86,7 @@ const myPage = ref(0)
 const myLimit = ref(10)
 const myTotal = ref(0)
 const myTotalPages = computed(() => Math.max(1, Math.ceil(myTotal.value / myLimit.value)))
+const myStatus = ref('all') // 'all' | 'published' | 'draft'
 
 async function safeJson(res) {
   const contentType = res.headers.get('Content-Type') || ''
@@ -160,7 +169,13 @@ async function loadMyPosts() {
   myLoading.value = true
   myError.value = ''
   try {
-    const res = await fetch(`/api/posts?owner=me&limit=${myLimit.value}&page=${myPage.value}` , {
+    const params = new URLSearchParams({
+      owner: 'me',
+      limit: String(myLimit.value),
+      page: String(myPage.value),
+    })
+    if (myStatus.value !== 'all') params.set('status', myStatus.value)
+    const res = await fetch(`/api/posts?${params.toString()}`, {
       credentials: 'include',
     })
     if (!res.ok) {
@@ -190,7 +205,11 @@ onMounted(async () => {
   }
   await loadMyPosts()
 })
-watch(myPage, loadMyPosts)
+watch(myStatus, () => {
+  myPage.value = 0
+  loadMyPosts()
+})
+
 
 </script>
 
@@ -303,6 +322,12 @@ watch(myPage, loadMyPosts)
 .empty {
   text-align: center;
   color: #666;
+}
+.filters {
+  margin: 0.5rem 0 1rem;
+}
+.filters select {
+  margin-left: 0.5rem;
 }
 @media (max-width: 860px){
   .grid {

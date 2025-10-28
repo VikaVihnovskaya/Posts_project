@@ -1,11 +1,14 @@
 import Post from '../models/Post.js'
 import Category from '../models/Category.js'
 
-export async function listPosts({ userId, limit, page,ownerOnly = false }) {
+export async function listPosts({ userId, limit, page,ownerOnly = false, status }) {
     let filter
     if (ownerOnly) {
-        // Только посты владельца, включая черновики/архив
+        // Только посты владельца, с опциональной фильтрацией по статусу
         filter = { userId }
+        if (status === 'draft' || status === 'published') {
+            filter.status = status
+        }
     } else if (userId) {
         // Для авторизованного: публичные + его собственные
         filter = { $or: [{ status: 'published' }, { userId }] }
