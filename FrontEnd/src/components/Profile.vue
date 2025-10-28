@@ -14,7 +14,7 @@
             <img :src="avatarPreview || user?.avatarUrl || placeholder" alt="avatar" class="avatar" />
           </div>
           <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileChange" />
-          <button class="btn outline" @click="$refs.fileInput.click()">Upload New Photo</button>
+          <button class="btn outline" @click="fileInput?.value?.click()">Upload New Photo</button>
         </div>
         <form class="right" @submit.prevent="saveUserProfile">
           <label>Name
@@ -43,6 +43,10 @@
         </label>
       </div>
       <section v-if="myLoading" class="empty"><p>Loading…</p></section>
+      <section v-else-if="myError" class="error" aria-live="polite">
+        <p>{{ myError }}</p>
+        <button class="btn outline" @click="loadMyPosts()">Try again</button>
+      </section>
       <section v-else>
           <div v-if="myItems.length" class="feed">
             <PostCard v-for="p in myItems" :key="p._id" :post="p" />
@@ -64,6 +68,7 @@
 <script setup>
 import { computed, reactive, ref, watchEffect, onMounted, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { useRoute, useRouter } from 'vue-router'
 import PostCard from './PostCard.vue'
 const auth = useAuthStore()
 const user = computed(() => auth.user)
@@ -73,7 +78,8 @@ watchEffect(() => {
   form.email = user.value?.email || ''
   form.about = user.value?.about || ''
 })
-
+const route = useRoute()
+const router = useRouter()
 const saving = ref(false)
 const fileInput = ref(null)
 const avatarFile = ref(null)
@@ -165,7 +171,7 @@ async function saveUserProfile() {
     saving.value = false
   }
 }
-async function loadMyPosts() {
+async function loadMyPosts({ allowAdjust = true } = {}) {
   myLoading.value = true
   myError.value = ''
   try {
@@ -187,6 +193,18 @@ async function loadMyPosts() {
     const data = await res.json()
     myItems.value = Array.isArray(data.items) ? data.items : []
     myTotal.value = data.total || 0
+    // === Обработка выхода за пределы страниц ===
+    if (allowAdjust && myPage.value > 0 && myItems.value.length === 0) {
+      const totalPages = Math.max(1, Math.ceil(myTotal.value / myLimit.value))
+      const lastPage = Math.max(0, totalPages - 1)
+      if (myPage.value > lastPage) {
+        myPage.value = lastPage
+        await updateUrl({ replace: true }) // синхронизируем URL
+        // Одноразовый повторный запрос без дальнейших корректировок,
+        // чтобы избежать потенциальной рекурсии
+        return await loadMyPosts({ allowAdjust: false })
+      }
+    }
   } catch (e) {
     myItems.value = []
     myTotal.value = 0
@@ -195,21 +213,75 @@ async function loadMyPosts() {
     myLoading.value = false
   }
 }
+function normalizeStatus(queryStatus) {
+  return queryStatus === 'published' || queryStatus === 'draft' ? queryStatus : 'all'
+}
 
-function myNext() { if (myPage.value < myTotalPages.value - 1) myPage.value += 1 }
-function myPrev() { if (myPage.value > 0) myPage.value -= 1 }
-
+function normalizePage(queryPage) {
+  const pageNumber = Number(queryPage)
+  return Number.isInteger(pageNumber) && pageNumber >= 0 ? pageNumber : 0
+}
 onMounted(async () => {
+  // Синхронизируемся с URL перед загрузкой
+  const initialStatus = normalizeStatus(route.query.status)
+  const initialPage = normalizePage(route.query.page)
+  if (myStatus.value !== initialStatus) myStatus.value = initialStatus
+  if (myPage.value !== initialPage) myPage.value = initialPage
+
   if (!auth.user) {
     await auth.checkAuth()
   }
   await loadMyPosts()
 })
-watch(myStatus, () => {
+function updateUrl({ replace = true } = {}) {
+  const nextQuery = {
+    ...route.query,
+    // Удаляем значения по умолчанию — Vue Router не будет добавлять их в query
+    status: myStatus.value === 'all' ? undefined : myStatus.value,
+    page: myPage.value > 0 ? String(myPage.value) : undefined,
+  }
+
+  const navigation = route.name
+      ? { name: route.name, params: route.params, query: nextQuery }
+      : { path: route.path, query: nextQuery }
+
+  return replace ? router.replace(navigation) : router.push(navigation)
+}
+
+// При изменении фильтра статуса — сбрасываем страницу, обновляем URL и загружаем заново
+watch(myStatus, async () => {
   myPage.value = 0
+  await updateUrl({ replace: true })
   loadMyPosts()
 })
 
+async function myNext() {
+  if (myPage.value < myTotalPages.value - 1) {
+    myPage.value += 1
+    await updateUrl({ replace: false }) // записать в историю
+    loadMyPosts()
+  }
+}
+async function myPrev() {
+  if (myPage.value > 0) {
+    myPage.value -= 1
+    await updateUrl({ replace: false })
+    loadMyPosts()
+  }
+}
+watch(
+    () => ({ statusQuery: route.query.status, pageQuery: route.query.page }),
+    ({ statusQuery, pageQuery }) => {
+      const newStatus = normalizeStatus(statusQuery)
+      const newPage = normalizePage(pageQuery)
+      let changed = false
+      if (myStatus.value !== newStatus) { myStatus.value = newStatus; changed = true }
+      if (myPage.value !== newPage)   { myPage.value = newPage; changed = true }
+      if (changed) {
+        loadMyPosts()
+      }
+    }
+)
 
 </script>
 
@@ -328,6 +400,14 @@ watch(myStatus, () => {
 }
 .filters select {
   margin-left: 0.5rem;
+}
+.error {
+  background: #ffeaea;
+  color: #a90000;
+  border: 1px solid #ffb3b3;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin: 0.5rem 0 1rem;
 }
 @media (max-width: 860px){
   .grid {
