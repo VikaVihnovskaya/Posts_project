@@ -66,10 +66,12 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watchEffect, onMounted, watch } from 'vue'
-import { useAuthStore } from '../stores/auth'
-import { useRoute, useRouter } from 'vue-router'
+import {extractServerMessage, mapFetchError} from "../utils/handlerErrors.js";
+import {computed, onMounted, reactive, ref, watch, watchEffect} from 'vue'
+import {useAuthStore} from '../stores/auth'
+import {useRoute, useRouter} from 'vue-router'
 import PostCard from './PostCard.vue'
+
 const auth = useAuthStore()
 const user = computed(() => auth.user)
 const form = reactive({ name: '', email: '', about: '' })
@@ -94,15 +96,6 @@ const myTotal = ref(0)
 const myTotalPages = computed(() => Math.max(1, Math.ceil(myTotal.value / myLimit.value)))
 const myStatus = ref('all') // 'all' | 'published' | 'draft'
 
-async function safeJson(res) {
-  const contentType = res.headers.get('Content-Type') || ''
-  if (contentType.includes('application/json')) {
-    const responseBody = await res.text()
-    if (responseBody) return JSON.parse(responseBody)
-  }
-  return null
-}
-
 function onFileChange(event) {
   const selectedFile = event.target.files?.[0]
   if (!selectedFile) return
@@ -121,17 +114,12 @@ async function uploadAvatarFile() {
     credentials: 'include',
     body: formData
   })
-
-  const responseData = await safeJson(response)
   if (!response.ok) {
-    return { ok: false, message: responseData?.message || 'Upload failed' }
+    const serverMsg = await extractServerMessage(response)
+    return { ok: false, message: mapFetchError({ res: response, serverMessage: serverMsg }) }
   }
-
-  auth.user = {
-    ...(auth.user || {}),
-    avatarUrl: responseData?.avatarUrl || ''
-  }
-
+  const responseData = await response.json().catch(() => ({}))
+  auth.user = { ...(auth.user || {}), avatarUrl: responseData?.avatarUrl || '' }
   avatarFile.value = null
   avatarPreview.value = ''
   return { ok: true }
@@ -145,7 +133,6 @@ async function saveUserProfile() {
     if (!avatarUploadResult.ok) {
       return { ok: false, message: avatarUploadResult.message }
     }
-
     // 2) Сохраняем профиль
     const response = await fetch('/api/users', {
       method: 'PUT',
@@ -157,13 +144,12 @@ async function saveUserProfile() {
         about: form.about
       })
     })
-
-    const responseData = await safeJson(response)
     if (!response.ok) {
-      return { ok: false, message: responseData?.message || 'Profile update failed' }
+      const serverMsg = await extractServerMessage(response)
+      alert(mapFetchError({ res: response, serverMessage: serverMsg }))
+      return { ok: false }
     }
-
-    auth.user = responseData
+    auth.user = await response.json().catch(() => ({}))
     alert('Profile saved')
   } catch (error) {
     alert(error.message)
@@ -185,9 +171,10 @@ async function loadMyPosts({ allowAdjust = true } = {}) {
       credentials: 'include',
     })
     if (!res.ok) {
+      const serverMsg = await extractServerMessage(res)
+      myError.value = mapFetchError({ res, serverMessage: serverMsg })
       myItems.value = []
       myTotal.value = 0
-      myError.value = 'Failed to load my posts'
       return
     }
     const data = await res.json()
@@ -200,15 +187,13 @@ async function loadMyPosts({ allowAdjust = true } = {}) {
       if (myPage.value > lastPage) {
         myPage.value = lastPage
         await updateUrl({ replace: true }) // синхронизируем URL
-        // Одноразовый повторный запрос без дальнейших корректировок,
-        // чтобы избежать потенциальной рекурсии
         return await loadMyPosts({ allowAdjust: false })
       }
     }
-  } catch (e) {
+  } catch (error) {
     myItems.value = []
     myTotal.value = 0
-    myError.value = e.message || 'Error'
+    myError.value = mapFetchError({ error })
   } finally {
     myLoading.value = false
   }
@@ -252,21 +237,21 @@ function updateUrl({ replace = true } = {}) {
 watch(myStatus, async () => {
   myPage.value = 0
   await updateUrl({ replace: true })
-  loadMyPosts()
+  await loadMyPosts()
 })
 
 async function myNext() {
   if (myPage.value < myTotalPages.value - 1) {
     myPage.value += 1
     await updateUrl({ replace: false }) // записать в историю
-    loadMyPosts()
+    await loadMyPosts()
   }
 }
 async function myPrev() {
   if (myPage.value > 0) {
     myPage.value -= 1
     await updateUrl({ replace: false })
-    loadMyPosts()
+    await loadMyPosts()
   }
 }
 watch(
