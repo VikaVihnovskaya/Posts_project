@@ -41,6 +41,8 @@ export async function updatePostCtrl(req, res) {
     const post = await updatePostEntity(req.post, req.body)
     reconcilePublishFields(post)
     await post.save()
+    // Вернём уже популированный пост
+    await post.populate({ path: 'categories', select: 'name' })
     res.json(post)
 }
 

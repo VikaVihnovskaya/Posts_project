@@ -57,10 +57,10 @@
           </label>
           <p v-if="uploadError" class="state error">{{ uploadError }}</p>
         </div>
-        <div v-if="categoryNames.length" class="row">
+        <div v-if="post.categories?.length" class="row">
           <strong>Categories:</strong>
           <ul class="inline-list">
-            <li v-for="(name, i) in categoryNames" :key="i">{{ name }}</li>
+            <li v-for="c in post.categories" :key="c._id">{{ c.name }}</li>
           </ul>
         </div>
         <div v-if="post.tags?.length" class="row">
@@ -149,13 +149,16 @@
               <option value="archived">archived</option>
             </select>
           </label>
-
+          <label class="field">
+            <span>Categories</span>
+            <select v-model="selectedCategoryIds" multiple>
+              <option v-for="c in categoryOptions" :key="c._id" :value="c._id">{{ c.name }}</option>
+            </select>
+          </label>
           <label class="field">
             <span>Tags (comma-separated)</span>
             <input v-model.trim="form.tagsText" type="text" placeholder="Enter new tags"/>
           </label>
-          <!-- Категории пока не редактируем, но отправим текущие названия, если есть -->
-          <!--          <div class="hint">Categories are preserved as is.</div>-->
           <div class="actions">
             <button class="btn" type="submit" :disabled="busy">Save</button>
             <button class="btn outline" type="button" @click="cancelEdit" :disabled="busy">Cancel</button>
@@ -167,10 +170,10 @@
 </template>
 
 <script setup>
-import {onMounted, ref, computed} from 'vue'
+import {onMounted, ref, computed, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {useAuthStore} from "../stores/auth.js"
-
+import { apiFetch } from '../utils/apiFetch.js'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -200,6 +203,8 @@ const commentsError = ref('')
 const newComment = ref('')
 const editingCommentId = ref(null)
 const editingText = ref('')
+const categoryOptions = ref([])
+const selectedCategoryIds = ref([])
 
 const isPublished = computed(() => post.value?.status === 'published')
 
@@ -208,13 +213,22 @@ function formatDate(d) {
   return date.toLocaleString()
 }
 
-const categoryNames = computed(() => {
-  const arr = Array.isArray(post.value?.categories) ? post.value.categories : []
-  return arr
-      .map(c => (typeof c === 'object' && c !== null ? c.name : null))
-      .filter(Boolean)
+onMounted(async () => {
+  try {
+    categoryOptions.value = await apiFetch('/api/categories')
+  } catch (e) {
+    console.error('Failed to load categories', e)
+  }
 })
-
+watch(
+    () => [post.value, editPost.value],
+    () => {
+      if (post.value && editPost.value) {
+        const arr = Array.isArray(post.value.categories) ? post.value.categories : []
+        selectedCategoryIds.value = arr.map(c => c?._id ?? c).filter(Boolean)
+      }
+    }
+)
 // Определяем владельца: проверяем несколько вариантов поля идентификатора
 const currentUserId = computed(() => auth.user?.sub || auth.user?._id || auth.user?.id || null)
 const isOwner = computed(() => {
@@ -279,6 +293,7 @@ function parseTags(text) {
 
 async function onSave() {
   if (!isOwner.value) return
+
   busy.value = true
   error.value = ''
 
@@ -289,7 +304,7 @@ async function onSave() {
     status: form.value.status,
     tags: parseTags(form.value.tagsText),
     // Сохраняем текущие категории (по именам), если они были пока так
-    categories: categoryNames.value,
+    categories: selectedCategoryIds.value,
   }
 
   const res = await fetch(`/api/posts/${id}`, {

@@ -1,5 +1,6 @@
 import express from 'express'
 import upload from "../middleware/uploadMiddleware.js";
+import {validateCategoriesBody} from "../middleware/validateCategories.js";
 import { optionalVerifyToken } from '../middleware/optionalVerifyToken.js'
 import { verifyToken } from '../middleware/verifyToken.js'
 import { validateObjectId } from '../middleware/validateObjectId.js'
@@ -23,11 +24,13 @@ router.get('/:id',
     (req, res, next) => getPost(req, res).catch(next))
 router.post('/',
     verifyToken,
+    validateCategoriesBody,
     (req, res, next) => createPostCtrl(req, res).catch(next))
 router.put('/:id',
     verifyToken,
     validateObjectId('id'),
     checkPostOwner,
+    validateCategoriesBody,
     (req, res, next) => updatePostCtrl(req, res).catch(next))
 router.delete('/:id',
     verifyToken,

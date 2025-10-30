@@ -28,9 +28,11 @@
 
       <div class="two-cols">
         <div class="field">
-          <label>Categories (by name)</label>
-          <input v-model="categoriesInput" type="text" placeholder="Enter categories" />
-          <small class="hint">Enter categories, separated by commas.</small>
+          <label>Categories</label>
+          <select v-model="selectedCategoryIds" multiple>
+            <option v-for="c in categoryOptions" :key="c._id" :value="c._id">{{ c.name }}</option>
+          </select>
+          <small class="hint">Select one or more categories</small>
         </div>
         <div class="field">
           <label>Tags * (at least one)</label>
@@ -62,8 +64,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { apiFetch } from '../utils/apiFetch.js'
 
 const router = useRouter()
 const submitting = ref(false)
@@ -78,8 +81,9 @@ const form = ref({
   status: 'published',
 })
 
-const categoriesInput = ref('')
 const tagsInput = ref('')
+const categoryOptions = ref([])
+const selectedCategoryIds = ref([])
 // Парсинг строк по запятым
 function parseList(input) {
   return String(input || '')
@@ -105,7 +109,13 @@ function validateTags(list) {
   }
   return ''
 }
-
+onMounted(async () => {
+  try {
+    categoryOptions.value = await apiFetch('/api/categories')
+  } catch (e) {
+    console.error('Failed to load categories.', e)
+  }
+})
 async function submitAs(status) {
   form.value.status = status
   await onSubmit()
@@ -114,69 +124,35 @@ async function submitAs(status) {
 async function onSubmit() {
   error.value = ''
   success.value = false
-
-  // Простая клиентская валидация
-  if (!form.value.title || form.value.title.trim().length < 3) {
-    error.value = 'Title must be at least 3 characters'
-    return
-  }
-  const detailsText = String(form.value.details || '').trim()
-  if (detailsText.length < 10) {
-    error.value = 'Content must be at least 10 characters'
-    return
-  }
-
-  const categories = parseList(categoriesInput.value)
-  const tagsRaw = parseList(tagsInput.value)
-  const tags = normalizeTags(tagsRaw)
-  const tagsErr = validateTags(tags)
-  if (tagsErr) {
-    error.value = tagsErr
-    return
-  }
-
-  const payload = {
-    title: form.value.title.trim(),
-    summary: form.value.summary?.trim() || '',
-    details: detailsText,
-    author: form.value.author?.trim() || '',
-    status: form.value.status,
-    categories,
-    tags,
-  }
-
   submitting.value = true
   try {
-    const res = await fetch('/api/posts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(payload),
-    })
-
-    const data = await res.json().catch(() => null)
-    if (!res.ok) {
-      const msg = data?.message || 'Failed to create post'
-      if (data?.errors) {
-        const firstErr = Object.values(data.errors)[0]?.message
-        error.value = firstErr ? `${msg}: ${firstErr}` : msg
-      } else {
-        error.value = msg
-      }
+    const tags = normalizeTags(parseList(tagsInput.value))
+    const validationMessage = validateTags(tags)
+    if (validationMessage) {
+      error.value = validationMessage
+      submitting.value = false
       return
     }
 
-    success.value = true
-    if (payload.status === 'published') {
-      router.push('/')
-    } else {
-      // Если черновик — очистим форму
-      form.value = { title: '', summary: '', details: '', author: '', status: 'draft' }
-      categoriesInput.value = ''
-      tagsInput.value = ''
+    const payload = {
+      title: form.value.title,
+      summary: form.value.summary,
+      details: form.value.details,
+      author: form.value.author,
+      status: form.value.status,
+      categories: selectedCategoryIds.value,
+      tags,
     }
+
+    await apiFetch('/api/posts', {
+      method: 'POST',
+      body: payload,
+    })
+
+    success.value = true
+    router.push('/')
   } catch (e) {
-    error.value = e?.message || 'Network error'
+    error.value = e.message || 'Failed to create post'
   } finally {
     submitting.value = false
   }

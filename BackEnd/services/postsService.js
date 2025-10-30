@@ -1,6 +1,23 @@
+import mongoose from 'mongoose'
 import Post from '../models/Post.js'
 import Category from '../models/Category.js'
+const { Types } = mongoose
+function isValidObjectIdArray(arr) {
+    return Array.isArray(arr) && arr.every(id => Types.ObjectId.isValid(id))
+}
+async function assertCategoriesExist(categoryIds) {
+    if (!categoryIds?.length) return
 
+    const existingCategoriesCount = await Category.countDocuments({
+        _id: { $in: categoryIds },
+    })
+
+    if (existingCategoriesCount !== categoryIds.length) {
+        const err = new Error('One or more categories not found')
+        err.status = 404
+        throw err
+    }
+}
 export async function listPosts({ userId, limit, page,ownerOnly = false, status }) {
     let filter
     if (ownerOnly) {
@@ -18,7 +35,12 @@ export async function listPosts({ userId, limit, page,ownerOnly = false, status 
     }
 
     const [items, total] = await Promise.all([
-        Post.find(filter).sort({ publishedAt: -1, id: -1 }).limit(limit).skip(page * limit).lean(),
+        Post.find(filter)
+            .sort({ publishedAt: -1, id: -1 })
+            .limit(limit)
+            .skip(page * limit)
+            .populate('categories', 'name')
+            .lean(),
         Post.countDocuments(filter),
     ])
     return { items, total }
@@ -29,13 +51,22 @@ export async function getPostById(id) {
 }
 
 export async function createPost({ data, userId }) {
-    const { title, summary, details, author, status, categories, tags } = data
-    const obtainedCategories = await Category.find({ name: { $in: categories } })
+    const { title, summary, details, author, status, categories = [], tags = [] } = data
+    if (!isValidObjectIdArray(categories)) {
+        const err = new Error('categories must be an array of valid ObjectId')
+        err.status = 400
+        throw err
+    }
+    await assertCategoriesExist(categories)
     return new Post({
-        title, summary, details, author, status,
-        categories: obtainedCategories,
-        tags: Array.isArray(tags) ? tags : tags,
+        title,
+        summary,
+        details,
+        author,
+        status,
         userId,
+        categories,
+        tags: Array.isArray(tags) ? tags : [tags].filter(Boolean),
     })
 }
 
@@ -46,10 +77,16 @@ export async function updatePostEntity(post, data) {
     if (details !== undefined) post.details = details
     if (status !== undefined) post.status = status
     if (categories !== undefined) {
-        post.categories = await Category.find({ name: { $in: categories } })
+        if (!isValidObjectIdArray(categories)) {
+            const err = new Error('categories must be an array of valid ObjectId')
+            err.status = 400
+            throw err
+        }
+        await assertCategoriesExist(categories)
+        post.categories = categories
     }
     if (tags !== undefined) {
-        post.tags = Array.isArray(tags) ? tags : [tags]
+        post.tags = Array.isArray(tags) ? tags : [tags].filter(Boolean)
     }
     return post
 }

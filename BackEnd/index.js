@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import cors from "cors";
 import userRoutes from "./routes/userRoutes.js";
 import postRoutes from "./routes/postRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
 import { createS3Client, ensureBucket, makeBucketPublicRead } from "./utils/s3.js";
 
 const app = express();
@@ -24,7 +25,7 @@ app.get("/health/live", (req, res) => res.status(200).json({ status: "ok" }));
 // Подключение роутов
 app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
-
+app.use("/api/categories", categoryRoutes);
 // Глобальные ссылки на внешние ресурсы
 app.locals.s3 = null;
 app.locals.s3Bucket = S3_BUCKET;
