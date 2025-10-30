@@ -1,4 +1,4 @@
-<template>
+<template xmlns="http://www.w3.org/1999/html">
   <div class="profile">
     <header class="topbar">
       <router-link class="btn outline" to="/">← Home</router-link>
@@ -13,8 +13,8 @@
           <div class="avatar-wrap">
             <img :src="avatarPreview || user?.avatarUrl || placeholder" alt="avatar" class="avatar" />
           </div>
-          <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileChange" />
-          <button class="btn outline" @click="fileInput?.value?.click()">Upload New Photo</button>
+          <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileChange">
+          <button class="btn outline" type="button" @click="openFilePicker">Upload New Photo</button>
         </div>
         <form class="right" @submit.prevent="saveUserProfile">
           <label>Name
@@ -96,6 +96,9 @@ const myTotal = ref(0)
 const myTotalPages = computed(() => Math.max(1, Math.ceil(myTotal.value / myLimit.value)))
 const myStatus = ref('all') // 'all' | 'published' | 'draft'
 
+function openFilePicker() {
+       fileInput.value?.click()
+}
 function onFileChange(event) {
   const selectedFile = event.target.files?.[0]
   if (!selectedFile) return
