@@ -51,7 +51,7 @@
         </div>
         <!-- Дозагрузка изображений — только для владельца -->
         <div v-if="isOwner" class="upload-more">
-          <label class="field">
+          <label class="field ">
             <span>Add images</span>
             <input type="file" multiple accept="image/*" @change="uploadMore" :disabled="uploading" />
           </label>
@@ -61,7 +61,7 @@
           <strong>Categories:</strong>
           <span class="chips">
     <span class="chip" v-for="c in post.categories" :key="c._id || c">
-      *{{ c.name || c }}
+      {{ c.name || c }}
     </span>
   </span>
         </div>
@@ -832,8 +832,23 @@ textarea {
 .upload-more { margin-top: 10px }
 .chips {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
-  font-style: italic;
+  gap: 8px;
+  margin-top: 8px;
 }
+
+.chip {
+  background-color: #2a9d6f;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
 </style>
