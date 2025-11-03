@@ -59,9 +59,11 @@
         </div>
         <div v-if="post.categories?.length" class="row">
           <strong>Categories:</strong>
-          <ul class="inline-list">
-            <li v-for="c in post.categories" :key="c._id">{{ c.name }}</li>
-          </ul>
+          <span class="chips">
+    <span class="chip" v-for="c in post.categories" :key="c._id || c">
+      *{{ c.name || c }}
+    </span>
+  </span>
         </div>
         <div v-if="post.tags?.length" class="row">
           <strong>Tags:</strong>
@@ -151,9 +153,18 @@
           </label>
           <label class="field">
             <span>Categories</span>
-            <select v-model="selectedCategoryIds" multiple>
-              <option v-for="c in categoryOptions" :key="c._id" :value="c._id">{{ c.name }}</option>
-            </select>
+            <Multiselect
+                v-model="selectedCategoryIds"
+                :options="categoryOptions"
+                :multiple="true"
+                :close-on-select="false"
+                :clear-on-select="false"
+                :preserve-search="true"
+                track-by="_id"
+                label="name"
+                :reduce="categoryId"
+                placeholder="Select categories"
+            />
           </label>
           <label class="field">
             <span>Tags (comma-separated)</span>
@@ -170,10 +181,12 @@
 </template>
 
 <script setup>
-import {onMounted, ref, computed, watch} from 'vue'
+import {computed, onMounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {useAuthStore} from "../stores/auth.js"
-import { apiFetch } from '../utils/apiFetch.js'
+import {apiFetch} from '../utils/apiFetch.js'
+import Multiselect from "vue-multiselect";
+
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -205,14 +218,29 @@ const editingCommentId = ref(null)
 const editingText = ref('')
 const categoryOptions = ref([])
 const selectedCategoryIds = ref([])
-
+const categoryId = c => c._id
 const isPublished = computed(() => post.value?.status === 'published')
+const isValidObjectId = (v) => typeof v === 'string' && /^[0-9a-fA-F]{24}$/.test(v)
 
 function formatDate(d) {
   const date = new Date(d)
   return date.toLocaleString()
 }
-
+function normalizePostCategories(p) {
+  const opts = Array.isArray(categoryOptions.value) ? categoryOptions.value : []
+  const byId = new Map(opts.map(c => [c._id, c]))
+  const arr = Array.isArray(p?.categories) ? p.categories : []
+  return arr
+      .map(c => {
+        if (c && typeof c === 'object' && c._id) return c
+        if (typeof c === 'string') {
+          if (isValidObjectId(c)) return byId.get(c) || c
+          return c
+        }
+        return null
+      })
+      .filter(Boolean)
+}
 onMounted(async () => {
   try {
     categoryOptions.value = await apiFetch('/api/categories')
@@ -220,12 +248,13 @@ onMounted(async () => {
     console.error('Failed to load categories', e)
   }
 })
+
+
 watch(
-    () => [post.value, editPost.value],
+    () => categoryOptions.value,
     () => {
-      if (post.value && editPost.value) {
-        const arr = Array.isArray(post.value.categories) ? post.value.categories : []
-        selectedCategoryIds.value = arr.map(c => c?._id ?? c).filter(Boolean)
+      if (post.value) {
+        post.value.categories = normalizePostCategories(post.value)
       }
     }
 )
@@ -261,6 +290,7 @@ async function load() {
     return
   }
   post.value = data
+  post.value.categories = normalizePostCategories(post.value)
   if (post.value?.title) {
     document.title = `${post.value.title} — Post`
   }
@@ -277,6 +307,10 @@ function startEdit() {
     status: post.value.status || 'draft',
     tagsText: Array.isArray(post.value.tags) ? post.value.tags.join(', ') : '',
   }
+  // ИНИЦИАЛИЗАЦИЯ ВЫБОРА КАТЕГОРИЙ ПРИ ВХОДЕ В РЕДАКТИРОВАНИЕ
+  selectedCategoryIds.value = Array.isArray(post.value.categories) ? post.value.categories : []
+      // .map(c => (c && typeof c === 'object' && c._id) ? c._id : (typeof c === 'string' ? c : null))
+      // .filter(isValidObjectId)
 }
 
 function cancelEdit() {
@@ -296,7 +330,9 @@ async function onSave() {
 
   busy.value = true
   error.value = ''
-
+  const categoriesClean = (Array.isArray(selectedCategoryIds.value) ? selectedCategoryIds.value : [])
+      .map(c => (c && typeof c === 'object' ? c._id : c))
+      .filter(isValidObjectId)
   const payload = {
     title: form.value.title,
     summary: form.value.summary,
@@ -304,7 +340,7 @@ async function onSave() {
     status: form.value.status,
     tags: parseTags(form.value.tagsText),
     // Сохраняем текущие категории (по именам), если они были пока так
-    categories: selectedCategoryIds.value,
+    categories: categoriesClean
   }
 
   const res = await fetch(`/api/posts/${id}`, {
@@ -322,6 +358,10 @@ async function onSave() {
     return
   }
   post.value = data
+  post.value.categories = normalizePostCategories(post.value)
+  selectedCategoryIds.value = (Array.isArray(post.value.categories) ? post.value.categories : [])
+      .map(c => (c && typeof c === 'object' ? c._id : c))
+      .filter(isValidObjectId)
   editPost.value = false
   busy.value = false
 }
@@ -790,4 +830,10 @@ textarea {
   background: #b00020
 }
 .upload-more { margin-top: 10px }
+.chips {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-style: italic;
+}
 </style>
