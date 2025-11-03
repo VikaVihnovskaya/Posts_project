@@ -29,9 +29,18 @@
       <div class="two-cols">
         <div class="field">
           <label>Categories</label>
-          <select v-model="selectedCategoryIds" multiple>
-            <option v-for="c in categoryOptions" :key="c._id" :value="c._id">{{ c.name }}</option>
-          </select>
+          <Multiselect
+              v-model="selectedCategoryIds"
+              :options="categoryOptions"
+              :multiple="true"
+              :close-on-select="false"
+              :clear-on-select="false"
+              :preserve-search="true"
+              track-by="_id"
+              label="name"
+              :reduce="categoryId"
+              placeholder="Select categories"
+          />
           <small class="hint">Select one or more categories</small>
         </div>
         <div class="field">
@@ -45,11 +54,18 @@
         <label>Author</label>
         <input v-model.trim="form.author" type="text" placeholder="Your display name" />
       </div>
-
       <div class="field inline">
-        <label>Status</label>
-        <label><input type="radio" value="draft" v-model="form.status" /> Draft</label>
-        <label><input type="radio" value="published" v-model="form.status" /> Publish</label>
+        <label>Status:</label>
+
+        <label class="radio">
+          <input type="radio" value="draft" v-model="form.status" />
+          <span>Draft</span>
+        </label>
+
+        <label class="radio">
+          <input type="radio" value="published" v-model="form.status" />
+          <span>Publish</span>
+        </label>
       </div>
 
       <div class="actions">
@@ -67,6 +83,8 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiFetch } from '../utils/apiFetch.js'
+import 'vue-multiselect/dist/vue-multiselect.css'
+import Multiselect from "vue-multiselect";
 
 const router = useRouter()
 const submitting = ref(false)
@@ -84,6 +102,7 @@ const form = ref({
 const tagsInput = ref('')
 const categoryOptions = ref([])
 const selectedCategoryIds = ref([])
+const categoryId = c => c._id
 // Парсинг строк по запятым
 function parseList(input) {
   return String(input || '')
@@ -133,6 +152,9 @@ async function onSubmit() {
       submitting.value = false
       return
     }
+    const categories = (selectedCategoryIds.value || []).map(c =>
+        typeof c === 'string' ? c : c && c._id ? String(c._id) : null
+    ).filter(Boolean)
 
     const payload = {
       title: form.value.title,
@@ -140,7 +162,7 @@ async function onSubmit() {
       details: form.value.details,
       author: form.value.author,
       status: form.value.status,
-      categories: selectedCategoryIds.value,
+      categories,
       tags,
     }
 
@@ -175,19 +197,48 @@ async function onSubmit() {
   flex-direction: column;
   gap: 1rem;
 }
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: .5rem;
+input,
+select {
   box-sizing: border-box;
+  width: 100%;
+  color: #1a1a1a;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: .75rem;
+  background: #fff;
+  font-size: 1rem;
 }
 .field.inline {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 1rem;
-
+  flex-wrap: wrap;
 }
+.field > label {
+  display: block;
+  margin-bottom: .35rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+.field.inline .radio {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  margin: 0;
+}
+
+.field.inline input[type="radio"] {
+  accent-color: #2a9d6f;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.field.inline input[type="radio"]:checked + span {
+  color: #2a9d6f;
+  font-weight: 600;
+}
+
 .two-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
