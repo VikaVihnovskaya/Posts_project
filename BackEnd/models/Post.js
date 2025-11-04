@@ -42,11 +42,13 @@ const postSchema = new mongoose.Schema({
         required: [true, "User is required"],
         index: true,
     },
-    categories: [{
-        type: Schema.Types.ObjectId,
-        ref: "Category",
-        index: true,
-    }],
+    categories: {
+        type: [{ type: Schema.Types.ObjectId, ref: 'Category', required: true }],
+        validate: {
+            validator: (v) => Array.isArray(v) && v.length > 0,
+            message: 'At least one category is required',
+        },
+    },
     comments: [{
         type: Schema.Types.ObjectId,
         ref: "Comment",

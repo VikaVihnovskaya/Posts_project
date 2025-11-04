@@ -28,7 +28,7 @@
 
       <div class="two-cols">
         <div class="field">
-          <label>Categories</label>
+          <label>Categories *</label>
           <Multiselect
               v-model="selectedCategoryIds"
               :options="categoryOptions"
@@ -40,8 +40,10 @@
               label="name"
               :reduce="categoryId"
               placeholder="Select categories"
+              :class="{ invalid: !!error && !selectedCategoryIds?.length }"
           />
-          <small class="hint">Select one or more categories</small>
+          <small class="hint" :class="{ danger: !!error && !selectedCategoryIds?.length }">
+            Select one or more categories</small>
         </div>
         <div class="field">
           <label>Tags * (at least one)</label>
@@ -69,8 +71,8 @@
       </div>
 
       <div class="actions">
-        <button class="btn" type="button" :disabled="submitting" @click="submitAs('draft')">Save draft</button>
-        <button class="btn" type="submit" :disabled="submitting">Publish</button>
+        <button class="btn" type="button" :disabled="!canSubmit" @click="submitAs('draft')">Save draft</button>
+        <button class="btn" type="submit" :disabled="!canSubmit">Publish</button>
       </div>
 
       <p v-if="error" class="error">{{ error }}</p>
@@ -80,7 +82,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import {ref, onMounted, computed} from 'vue'
 import { useRouter } from 'vue-router'
 import { apiFetch } from '../utils/apiFetch.js'
 import 'vue-multiselect/dist/vue-multiselect.css'
@@ -90,7 +92,9 @@ const router = useRouter()
 const submitting = ref(false)
 const error = ref('')
 const success = ref(false)
-
+const isCategoriesValid = computed(() => (selectedCategoryIds.value?.length || 0) > 0)
+const areTagsValid = computed(() => !validateTags(normalizeTags(parseList(tagsInput.value))))
+const canSubmit = computed(() => isCategoriesValid.value && areTagsValid.value && !submitting.value)
 const form = ref({
   title: '',
   summary: '',
@@ -152,10 +156,15 @@ async function onSubmit() {
       submitting.value = false
       return
     }
-    const categories = (selectedCategoryIds.value || []).map(c =>
-        typeof c === 'string' ? c : c && c._id ? String(c._id) : null
-    ).filter(Boolean)
-
+    const categories = (selectedCategoryIds.value || [])
+        .map(c => (typeof c === 'string' ? c : c && c._id ? String(c._id) : null))
+        .filter(Boolean)
+    // Проверка на наличие категории
+    if (!categories.length) {
+      error.value = 'Select at least one category'
+      submitting.value = false
+      return
+    }
     const payload = {
       title: form.value.title,
       summary: form.value.summary,
@@ -287,5 +296,11 @@ textarea {
 }
 .success {
   color: #2a9d6f; }
+.invalid {
+  border-color: #e74c3c;
+}
+.hint.danger {
+  color: #e74c3c;
+}
 @media (max-width: 760px) { .two-cols { grid-template-columns: 1fr; } }
 </style>
