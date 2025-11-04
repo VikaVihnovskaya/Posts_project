@@ -142,14 +142,17 @@
             <span>Details</span>
             <textarea v-model.trim="form.details" required minlength="10" rows="8"></textarea>
           </label>
-
           <label class="field">
             <span>Status</span>
-            <select v-model="form.status">
-              <option value="draft">draft</option>
-              <option value="published">published</option>
-              <option value="archived">archived</option>
-            </select>
+            <Multiselect
+                v-model="statusModel"
+                :options="statusOptions"
+                track-by="value"
+                label="label"
+                :searchable="false"
+                :allow-empty="false"
+                placeholder="Select status"
+            />
           </label>
           <label class="field">
             <span>Categories</span>
@@ -187,6 +190,7 @@ import {useAuthStore} from "../stores/auth.js"
 import {apiFetch} from '../utils/apiFetch.js'
 import Multiselect from "vue-multiselect";
 
+
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -221,7 +225,15 @@ const selectedCategoryIds = ref([])
 const categoryId = c => c._id
 const isPublished = computed(() => post.value?.status === 'published')
 const isValidObjectId = (v) => typeof v === 'string' && /^[0-9a-fA-F]{24}$/.test(v)
-
+const statusOptions = [
+  { label: 'draft',     value: 'draft' },
+  { label: 'published', value: 'published' },
+  { label: 'archived',  value: 'archived' },
+]
+const statusModel = computed({
+  get: () => statusOptions.find(o => o.value === form.value.status) || null,
+  set: (opt) => { form.value.status = opt?.value || 'draft' }
+})
 function formatDate(d) {
   const date = new Date(d)
   return date.toLocaleString()
@@ -258,6 +270,12 @@ watch(
       }
     }
 )
+watch(isPublished, async (now) => {
+  if (now) {
+    commentsError.value = ''
+    await loadComments()
+  }
+})
 // Определяем владельца: проверяем несколько вариантов поля идентификатора
 const currentUserId = computed(() => auth.user?.sub || auth.user?._id || auth.user?.id || null)
 const isOwner = computed(() => {
@@ -337,9 +355,8 @@ async function onSave() {
     title: form.value.title,
     summary: form.value.summary,
     details: form.value.details,
-    status: form.value.status,
+    status: form.value.status ?? post.value?.status ?? 'draft',
     tags: parseTags(form.value.tagsText),
-    // Сохраняем текущие категории (по именам), если они были пока так
     categories: categoriesClean
   }
 
@@ -390,6 +407,7 @@ async function onDelete() {
 }
 
 // Комментарии
+
 async function loadComments() {
   commentsLoading.value = true
   commentsError.value = ''
@@ -500,7 +518,7 @@ async function deleteComment(c) {
   comments.value = comments.value.filter(x => x._id !== c._id)
 }
 // Изображения
-// Загрузка одной или нескольких картинок владельцем поста
+
 async function uploadMore(e) {
   const files = Array.from(e?.target?.files || [])
   if (!files.length || !post.value?._id) return
@@ -558,7 +576,9 @@ async function removeImage(url) {
 
 onMounted(async () => {
   await load()
-  await loadComments()
+  if (post.value?.status === 'published') {
+    await loadComments()
+  }
 })
 
 </script>
