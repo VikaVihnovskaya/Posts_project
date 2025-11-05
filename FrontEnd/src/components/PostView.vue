@@ -29,8 +29,7 @@
         </div>
         <p v-if="post.summary" class="summary">{{ post.summary }}</p>
 
-        <div class="details" v-if="post.details">
-          <pre class="plain">{{ post.details }}</pre>
+        <div class="details post-content" v-if="post.details" v-html="safeDetails">
         </div>
         <!-- Изображения поста -->
         <div v-if="post.imageUrls?.length" class="images">
@@ -140,7 +139,20 @@
 
           <label class="field">
             <span>Details</span>
-            <textarea v-model.trim="form.details" required minlength="10" rows="8"></textarea>
+            <QuillEditor
+                v-model:content="form.details"
+                content-type="html"
+                theme="snow"
+                :toolbar="[
+                 ['bold', 'italic', 'underline', 'strike'],
+                 [{ header: [1, 2, 3, false] }],
+                 [{ list: 'ordered' }, { list: 'bullet' }],
+                 [{ align: [] }],
+                 ['link', 'blockquote', 'code-block'],
+                 ['clean']
+                ]"
+                style="min-height: 220px"
+            />
           </label>
           <label class="field">
             <span>Status</span>
@@ -189,6 +201,9 @@ import {useRoute, useRouter} from 'vue-router'
 import {useAuthStore} from "../stores/auth.js"
 import {apiFetch} from '../utils/apiFetch.js'
 import Multiselect from "vue-multiselect";
+import DOMPurify from 'dompurify'
+import { QuillEditor } from '@vueup/vue-quill'
+import '@vueup/vue-quill/dist/vue-quill.snow.css'
 
 
 const route = useRoute()
@@ -234,6 +249,11 @@ const statusModel = computed({
   get: () => statusOptions.find(o => o.value === form.value.status) || null,
   set: (opt) => { form.value.status = opt?.value || 'draft' }
 })
+const safeDetails = computed(() => {
+  const html = post.value?.details || ''
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+})
+
 function formatDate(d) {
   const date = new Date(d)
   return date.toLocaleString()
@@ -253,6 +273,12 @@ function normalizePostCategories(p) {
       })
       .filter(Boolean)
 }
+const minContentLength = 10
+const contentText = computed(() => String(form.value.details || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim())
+const isContentValid = computed(() => contentText.value.length >= minContentLength)
 onMounted(async () => {
   try {
     categoryOptions.value = await apiFetch('/api/categories')
@@ -325,7 +351,6 @@ function startEdit() {
     status: post.value.status || 'draft',
     tagsText: Array.isArray(post.value.tags) ? post.value.tags.join(', ') : '',
   }
-  // ИНИЦИАЛИЗАЦИЯ ВЫБОРА КАТЕГОРИЙ ПРИ ВХОДЕ В РЕДАКТИРОВАНИЕ
   selectedCategoryIds.value = Array.isArray(post.value.categories) ? post.value.categories : []
       // .map(c => (c && typeof c === 'object' && c._id) ? c._id : (typeof c === 'string' ? c : null))
       // .filter(isValidObjectId)
@@ -348,6 +373,11 @@ async function onSave() {
 
   busy.value = true
   error.value = ''
+  if (!isContentValid.value) {
+    error.value = `Content must be at least ${minContentLength} characters`
+    busy.value = false
+    return
+  }
   const categoriesClean = (Array.isArray(selectedCategoryIds.value) ? selectedCategoryIds.value : [])
       .map(c => (c && typeof c === 'object' ? c._id : c))
       .filter(isValidObjectId)
@@ -368,7 +398,6 @@ async function onSave() {
   })
 
   const data = await res.json().catch(() => null)
-
   if (!res.ok) {
     error.value = data?.message || 'Failed to update post'
     busy.value = false
@@ -676,14 +705,6 @@ onMounted(async () => {
   color: #1a1a1a
 }
 
-pre.plain {
-  white-space: pre-wrap;
-  font-family: inherit;
-  background: #fff;
-  border: 1px solid #eee;
-  padding: .75rem;
-  border-radius: 6px;
-}
 
 .row {
   margin-top: .75rem;
@@ -870,5 +891,10 @@ textarea {
   justify-content: center;
   white-space: nowrap;
 }
-
+.post-content { line-height: 1.65; }
+.post-content h1, .post-content h2, .post-content h3 { margin: 1.2em 0 .6em; }
+.post-content p { margin: .8em 0; }
+.post-content ul, .post-content ol { padding-left: 1.2em; }
+.post-content blockquote { border-left: 3px solid #ddd; padding-left: .8em; color: #555; }
+.post-content pre { background: #f6f6f6; padding: .75em; overflow: auto; }
 </style>

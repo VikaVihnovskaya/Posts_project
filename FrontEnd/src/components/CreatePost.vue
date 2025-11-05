@@ -15,15 +15,27 @@
         <label>Summary</label>
         <textarea v-model.trim="form.summary" rows="3" maxlength="500" placeholder="Enter short description"></textarea>
       </div>
-
       <div class="field">
         <label>Content *</label>
-        <textarea
-            v-model="form.details"
-            rows="10"
+        <QuillEditor
+            v-model:content="form.details"
+            content-type="html"
+            theme="snow"
             placeholder="Write your post content here. Minimum 10 characters."
-            required
-        ></textarea>
+            :toolbar="[
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ header: [1, 2, 3, false] }],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        [{ align: [] }],
+        ['link', 'blockquote', 'code-block'],
+        ['clean']
+      ]"
+            style="min-height: 220px"
+            :class="{ invalid: !!error && !isContentValid }"
+        />
+        <small class="hint" :class="{ danger: !!error && !isContentValid }">
+          Minimum {{ minContentLength }} characters of text
+        </small>
       </div>
 
       <div class="two-cols">
@@ -87,14 +99,13 @@ import { useRouter } from 'vue-router'
 import { apiFetch } from '../utils/apiFetch.js'
 import 'vue-multiselect/dist/vue-multiselect.css'
 import Multiselect from "vue-multiselect";
+import { QuillEditor } from '@vueup/vue-quill'
+import '@vueup/vue-quill/dist/vue-quill.snow.css'
 
 const router = useRouter()
 const submitting = ref(false)
 const error = ref('')
 const success = ref(false)
-const isCategoriesValid = computed(() => (selectedCategoryIds.value?.length || 0) > 0)
-const areTagsValid = computed(() => !validateTags(normalizeTags(parseList(tagsInput.value))))
-const canSubmit = computed(() => isCategoriesValid.value && areTagsValid.value && !submitting.value)
 const form = ref({
   title: '',
   summary: '',
@@ -107,6 +118,7 @@ const tagsInput = ref('')
 const categoryOptions = ref([])
 const selectedCategoryIds = ref([])
 const categoryId = c => c._id
+
 // Парсинг строк по запятым
 function parseList(input) {
   return String(input || '')
@@ -132,6 +144,7 @@ function validateTags(list) {
   }
   return ''
 }
+
 onMounted(async () => {
   try {
     categoryOptions.value = await apiFetch('/api/categories')
@@ -143,12 +156,25 @@ async function submitAs(status) {
   form.value.status = status
   await onSubmit()
 }
+// 2) вспомогательная проверка минимальной длины текста без HTML
+const minContentLength = 10
+const contentText = computed(() => String(form.value.details || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim())
+const isContentValid = computed(() => contentText.value.length >= minContentLength)
 
+// Обновляем canSubmit, чтобы учесть валидность контента
+const isCategoriesValid = computed(() => (selectedCategoryIds.value?.length || 0) > 0)
+const areTagsValid = computed(() => !validateTags(normalizeTags(parseList(tagsInput.value))))
+const canSubmit = computed(() => isCategoriesValid.value && areTagsValid.value && isContentValid.value && !submitting.value)
 async function onSubmit() {
   error.value = ''
   success.value = false
   submitting.value = true
   try {
+    if (!isContentValid.value) {
+      error.value = `Content must be at least ${minContentLength} characters`;
+      submitting.value = false
+      return
+    }
     const tags = normalizeTags(parseList(tagsInput.value))
     const validationMessage = validateTags(tags)
     if (validationMessage) {
@@ -179,7 +205,6 @@ async function onSubmit() {
       method: 'POST',
       body: payload,
     })
-
     success.value = true
     router.push('/')
   } catch (e) {
