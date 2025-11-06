@@ -6,15 +6,31 @@ export async function getPosts(req, res) {
     const { limit, page } = parsePaging(req)
     const requestedOwner = req.query.owner
     const requestedStatus = req.query.status // 'draft' | 'published' | undefined
+    // Парс дат из query (ожидаем YYYY-MM-DD)
+    const { dateFrom, dateTo } = req.query
+    let startDate = null
+    let endDate = null
+    if (dateFrom) {
+        const parsedStart = new Date(dateFrom)
+        if (!isNaN(parsedStart)) {
+            startDate = new Date(Date.UTC(parsedStart.getUTCFullYear(), parsedStart.getUTCMonth(), parsedStart.getUTCDate(), 0, 0, 0, 0))
+        }
+    }
+    if (dateTo) {
+        const parsedEnd = new Date(dateTo)
+        if (!isNaN(parsedEnd)) {
+            endDate = new Date(Date.UTC(parsedEnd.getUTCFullYear(), parsedEnd.getUTCMonth(), parsedEnd.getUTCDate(), 23, 59, 59, 999))
+        }
+    }
     // если owner=me — показываем только посты текущего пользователя
     if (requestedOwner === 'me') {
         if (!req.user) return res.status(401).json({ message: 'Unauthorized' })
-        const { items, total } = await listPosts({ userId: req.user.sub, limit, page, ownerOnly: true , status: requestedStatus,})
+        const { items, total } = await listPosts({ userId: req.user.sub, limit, page, ownerOnly: true , status: requestedStatus,dateFrom: startDate, dateTo: endDate })
         return res.json({ items, page, limit, total })
     }
 
     const userId = req.user?.sub || null
-    const { items, total } = await listPosts({ userId, limit, page })
+    const { items, total } = await listPosts({ userId, limit, page, dateFrom: startDate, dateTo: endDate})
     res.json({ items, page, limit, total })
 }
 

@@ -18,22 +18,55 @@ async function assertCategoriesExist(categoryIds) {
         throw err
     }
 }
-export async function listPosts({ userId, limit, page,ownerOnly = false, status }) {
-    let filter
+export async function listPosts({
+                                    userId,
+                                    limit,
+                                    page,
+                                    ownerOnly = false,
+                                    status,
+                                    dateFrom,
+                                    dateTo,
+                                }) {
+    // Формируем фильтр по диапазону дат
+    const dateFilter = {}
+    if (dateFrom) dateFilter.$gte = dateFrom
+    if (dateTo) dateFilter.$lte = dateTo
+    const hasDateFilter = Object.keys(dateFilter).length > 0
+
+    let filter = {}
+
+    //  1. Если запрошены только свои посты
     if (ownerOnly) {
-        // Только посты владельца, с опциональной фильтрацией по статусу
-        filter = { userId }
-        if (status === 'draft' || status === 'published') {
+        filter.userId = userId
+        // Ограничение по статусу (draft/published)
+        if (['draft', 'published'].includes(status)) {
             filter.status = status
         }
+        // Если задан диапазон дат, выбираем поле в зависимости от статуса
+        if (hasDateFilter) {
+            const dateField = filter.status === 'published' ? 'publishedAt' : 'createdAt'
+            filter[dateField] = dateFilter
+        }
+        //  2. Если пользователь авторизован, но не только свои
     } else if (userId) {
-        // Для авторизованного: публичные + его собственные
-        filter = { $or: [{ status: 'published' }, { userId }] }
+        if (hasDateFilter) {
+            filter = {
+                $or: [
+                    { status: 'published', publishedAt: dateFilter },
+                    { userId, createdAt: dateFilter },
+                ],
+            }
+        } else {
+            filter = { $or: [{ status: 'published' }, { userId }] }
+        }
+
+        // 3. Если пользователь не авторизован
     } else {
-        // Для неавторизованного: только публичные
         filter = { status: 'published' }
+        if (hasDateFilter) filter.publishedAt = dateFilter
     }
 
+    // Выполняем запросы параллельно
     const [items, total] = await Promise.all([
         Post.find(filter)
             .sort({ publishedAt: -1, id: -1 })
@@ -43,6 +76,7 @@ export async function listPosts({ userId, limit, page,ownerOnly = false, status 
             .lean(),
         Post.countDocuments(filter),
     ])
+
     return { items, total }
 }
 
