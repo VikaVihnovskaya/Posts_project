@@ -54,9 +54,12 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import PostCard from './PostCard.vue'
 
+const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const isAuth = computed(() => !!auth.user)
 const items = ref([])
@@ -73,20 +76,45 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.valu
 const dateFrom = ref('')
 const dateTo = ref('')
 
-function buildQuery() {
-  const params = new URLSearchParams()
-  params.set('limit', String(limit.value))
-  params.set('page', String(page.value))
-  if (dateFrom.value) params.set('dateFrom', dateFrom.value)
-  if (dateTo.value) params.set('dateTo', dateTo.value)
-  return params.toString()
+// Чтение и запись query
+function normalizeQuery(rawQuery) {
+  const query = { ...rawQuery }
+
+  const parsedPage = Number.parseInt(query.page, 10)
+  const parsedLimit = Number.parseInt(query.limit, 10)
+
+  return {
+    // Номер страницы: целое число ≥ 0, по умолчанию 0
+    page: Number.isFinite(parsedPage) && parsedPage >= 0 ? parsedPage : 0,
+
+    // Кол-во элементов на странице: 1–100, по умолчанию 10
+    limit:
+        Number.isFinite(parsedLimit) && parsedLimit > 0 && parsedLimit <= 100
+            ? parsedLimit
+            : 10,
+
+    // Даты фильтрации (если переданы)
+    dateFrom: typeof query.dateFrom === 'string' ? query.dateFrom : '',
+    dateTo: typeof query.dateTo === 'string' ? query.dateTo : '',
+  }
 }
+// Формируем объект query-параметров для запроса
+function buildQuery() {
+  const query = {
+    page: String(page.value),
+    limit: String(limit.value),
+  }
+  if (dateFrom.value) query.dateFrom = dateFrom.value
+  if (dateTo.value) query.dateTo = dateTo.value
+  return query
+}
+
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const queryString = buildQuery()
-    const response = await fetch(`/api/posts?${queryString}`, { credentials: 'include' })
+    const params = new URLSearchParams(buildQuery())
+    const response = await fetch(`/api/posts?${params.toString()}}`, { credentials: 'include' })
     if (!response.ok) {
       error.value = 'Failed to load posts'
       items.value = []
@@ -104,26 +132,60 @@ async function load() {
     loading.value = false
   }
 }
+watch(
+    () => route.query,
+    (newQuery) => {
+      // Преобразуем строковые query в корректные значения (числа, даты и т.п.)
+      const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo } = normalizeQuery(newQuery)
+        page.value = queryPage
+        limit.value = queryLimit
+        dateFrom.value = queryFrom
+        dateTo.value = queryTo
+        load()
+      },
+    { immediate: true }
+)
+async function updateQuery(partial, { replace = false } = {}) {
+  const current = normalizeQuery(route.query)
+  // Собираем итоговый объект, удаляем пустые
+  const next = {
+    ...route.query, // сохранить сторонние параметры
+    page: String(partial.page ?? current.page),
+    limit: String(partial.limit ?? current.limit),
+  }
+  const startDate = partial.dateFrom ?? current.dateFrom
+  const endDate = partial.dateTo ?? current.dateTo
+  if (startDate) next.dateFrom = startDate; else delete next.dateFrom
+  if (endDate) next.dateTo = endDate; else delete next.dateTo
+
+  // Убираем дубликаты
+  const same =
+      String(route.query.page ?? '') === String(next.page) &&
+      String(route.query.limit ?? '') === String(next.limit) &&
+      String(route.query.dateFrom ?? '') === String(next.dateFrom ?? '') &&
+      String(route.query.dateTo ?? '') === String(next.dateTo ?? '')
+  if (same) return
+
+  if (replace) await router.replace({ query: next })
+  else await router.push({ query: next })
+}
 function applyFilters() {
-  // При применении фильтров возвращаемся на 1-ю страницу
-  page.value = 0
-  load()
+  // При применении фильтра сбрасываем на первую страницу
+  updateQuery({ page: 0, dateFrom: dateFrom.value, dateTo: dateTo.value })
+}
+function resetFilters() {
+  updateQuery({ page: 0, dateFrom: '', dateTo: '' })
 }
 
-function resetFilters() {
-  dateFrom.value = ''
-  dateTo.value = ''
-  page.value = 0
-  load()
-}
 function nextPage() {
   if (page.value < totalPages.value - 1) {
-    page.value += 1
+    updateQuery({ page: page.value + 1 })
   }
 }
+
 function prevPage() {
   if (page.value > 0) {
-    page.value -= 1
+    updateQuery({ page: page.value - 1 })
   }
 }
 async function onLogout() {
@@ -135,9 +197,13 @@ onMounted(async () => {
   if (!auth.user) {
     await auth.checkAuth()
   }
-  await load()
+  // Инициализация URL дефолтами при первом заходе (без засорения истории)
+  const query = normalizeQuery(route.query)
+  const needsDefaults = route.query.page === undefined || route.query.limit === undefined
+  if (needsDefaults) {
+    await updateQuery({ page: query.page, limit: query.limit, dateFrom: query.dateFrom, dateTo: query.dateTo }, { replace: true })
+  }
 })
-watch(page, () => { load() })
 </script>
 
 <style scoped>
