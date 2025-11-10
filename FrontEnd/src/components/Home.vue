@@ -26,9 +26,21 @@
           <span>To</span>
           <input type="date" v-model="dateTo" :min="dateFrom || undefined" />
         </label>
+        <h3 style="margin-top: 1rem;">Filter by categories</h3>
+        <div class="category-list">
+          <div v-if="!allCategories.length" class="muted">No categories</div>
+          <label v-for="c in allCategories" :key="c._id" class="category-item">
+            <input
+                type="checkbox"
+                v-model="selectedCategoryIds"
+                :value="String(c._id)"
+            />
+            <span>{{ c.name }}</span>
+          </label>
+        </div>
         <div class="filter-actions">
           <button class="btn" :disabled="loading" @click="applyFilters">Apply</button>
-          <button class="btn outline" :disabled="loading || (!dateFrom && !dateTo)" @click="resetFilters">Reset</button>
+          <button class="btn outline" :disabled="loading || (!dateFrom && !dateTo && !selectedCategoryIds.length)" @click="resetFilters">Reset</button>
         </div>
       </aside>
       <!-- Правая колонка с лентой -->
@@ -76,12 +88,38 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.valu
 const dateFrom = ref('')
 const dateTo = ref('')
 
+// Категории
+const allCategories = ref([])
+const selectedCategoryIds = ref([])
+
+async function loadCategories() {
+  try {
+    const response = await fetch('/api/categories?limit=200&page=1')
+    if (response.ok) {
+      allCategories.value = await response.json()
+    } else {
+      console.warn('Failed to load categories:', response.status)
+      allCategories.value = []
+    }
+  } catch (e) {
+    console.warn('Error loading categories:', e)
+    allCategories.value = []
+  }
+}
 // Чтение и запись query
 function normalizeQuery(rawQuery) {
   const query = { ...rawQuery }
 
   const parsedPage = Number.parseInt(query.page, 10)
   const parsedLimit = Number.parseInt(query.limit, 10)
+  // categories может прийти как строка "id1,id2" или как массив
+  const rawCategories = query.categories
+  let categories = []
+  if (Array.isArray(rawCategories)) {
+    categories = rawCategories.map(String)
+  } else if (typeof rawCategories === 'string' && rawCategories.trim() !== '') {
+    categories = rawCategories.split(',').map(s => s.trim()).filter(Boolean)
+  }
 
   return {
     // Номер страницы: целое число ≥ 0, по умолчанию 0
@@ -96,6 +134,7 @@ function normalizeQuery(rawQuery) {
     // Даты фильтрации (если переданы)
     dateFrom: typeof query.dateFrom === 'string' ? query.dateFrom : '',
     dateTo: typeof query.dateTo === 'string' ? query.dateTo : '',
+    categories,
   }
 }
 // Формируем объект query-параметров для запроса
@@ -106,6 +145,9 @@ function buildQuery() {
   }
   if (dateFrom.value) query.dateFrom = dateFrom.value
   if (dateTo.value) query.dateTo = dateTo.value
+  if (selectedCategoryIds.value.length) {
+    query.categories = selectedCategoryIds.value.join(',')
+  }
   return query
 }
 
@@ -114,7 +156,7 @@ async function load() {
   error.value = ''
   try {
     const params = new URLSearchParams(buildQuery())
-    const response = await fetch(`/api/posts?${params.toString()}}`, { credentials: 'include' })
+    const response = await fetch(`/api/posts?${params.toString()}`, { credentials: 'include' })
     if (!response.ok) {
       error.value = 'Failed to load posts'
       items.value = []
@@ -136,11 +178,12 @@ watch(
     () => route.query,
     (newQuery) => {
       // Преобразуем строковые query в корректные значения (числа, даты и т.п.)
-      const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo } = normalizeQuery(newQuery)
+      const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo, categories } = normalizeQuery(newQuery)
         page.value = queryPage
         limit.value = queryLimit
         dateFrom.value = queryFrom
         dateTo.value = queryTo
+        selectedCategoryIds.value = categories
         load()
       },
     { immediate: true }
@@ -157,13 +200,16 @@ async function updateQuery(partial, { replace = false } = {}) {
   const endDate = partial.dateTo ?? current.dateTo
   if (startDate) next.dateFrom = startDate; else delete next.dateFrom
   if (endDate) next.dateTo = endDate; else delete next.dateTo
+  const categories = partial.categories ?? current.categories
+  if (categories && categories.length) next.categories = categories.join(','); else delete next.categories
 
   // Убираем дубликаты
   const same =
       String(route.query.page ?? '') === String(next.page) &&
       String(route.query.limit ?? '') === String(next.limit) &&
       String(route.query.dateFrom ?? '') === String(next.dateFrom ?? '') &&
-      String(route.query.dateTo ?? '') === String(next.dateTo ?? '')
+      String(route.query.dateTo ?? '') === String(next.dateTo ?? '') &&
+      String(route.query.categories ?? '') === String(next.categories ?? '')
   if (same) return
 
   if (replace) await router.replace({ query: next })
@@ -171,10 +217,11 @@ async function updateQuery(partial, { replace = false } = {}) {
 }
 function applyFilters() {
   // При применении фильтра сбрасываем на первую страницу
-  updateQuery({ page: 0, dateFrom: dateFrom.value, dateTo: dateTo.value })
+  updateQuery({ page: 0, dateFrom: dateFrom.value, dateTo: dateTo.value, categories: selectedCategoryIds.value})
 }
 function resetFilters() {
-  updateQuery({ page: 0, dateFrom: '', dateTo: '' })
+  selectedCategoryIds.value = []
+  updateQuery({ page: 0, dateFrom: '', dateTo: '', categories: [] })
 }
 
 function nextPage() {
@@ -197,11 +244,12 @@ onMounted(async () => {
   if (!auth.user) {
     await auth.checkAuth()
   }
+  await loadCategories()
   // Инициализация URL дефолтами при первом заходе (без засорения истории)
   const query = normalizeQuery(route.query)
   const needsDefaults = route.query.page === undefined || route.query.limit === undefined
   if (needsDefaults) {
-    await updateQuery({ page: query.page, limit: query.limit, dateFrom: query.dateFrom, dateTo: query.dateTo }, { replace: true })
+    await updateQuery({ page: query.page, limit: query.limit, dateFrom: query.dateFrom, dateTo: query.dateTo, categories: query.categories }, { replace: true })
   }
 })
 </script>
@@ -260,6 +308,20 @@ onMounted(async () => {
   padding: 0.75rem;
   background: #fafafa;
 }
+.category-list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.5rem 0 1rem;
+}
+.category-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+.muted {
+  color: #777;
+  font-size: 0.9rem; }
 .btn {
   padding: 6px 12px;
   background: #42b883;

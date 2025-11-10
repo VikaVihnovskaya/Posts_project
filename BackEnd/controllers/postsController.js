@@ -1,6 +1,7 @@
 import { parsePaging } from '../utils/paging.js'
 import { reconcilePublishFields } from '../utils/publishCheck.js'
 import { listPosts, getPostById, createPost, updatePostEntity, deletePostById } from '../services/postsService.js'
+import mongoose from "mongoose";
 
 export async function getPosts(req, res) {
     const { limit, page } = parsePaging(req)
@@ -22,15 +23,27 @@ export async function getPosts(req, res) {
             endDate = new Date(Date.UTC(parsedEnd.getUTCFullYear(), parsedEnd.getUTCMonth(), parsedEnd.getUTCDate(), 23, 59, 59, 999))
         }
     }
+    // Категории: строка "id1,id2" или массив
+    let categoryIds = []
+    const rawCategories = req.query.categories
+    if (Array.isArray(rawCategories)) {
+        categoryIds = rawCategories.map(String)
+    } else if (typeof rawCategories === 'string' && rawCategories.trim() !== '') {
+        categoryIds = rawCategories.split(',').map(s => s.trim()).filter(Boolean)
+    }
+    // Валидируем ObjectId
+    categoryIds = categoryIds.filter(id => mongoose.Types.ObjectId.isValid(id))
+    if (!categoryIds.length) categoryIds = null
+
     // если owner=me — показываем только посты текущего пользователя
     if (requestedOwner === 'me') {
         if (!req.user) return res.status(401).json({ message: 'Unauthorized' })
-        const { items, total } = await listPosts({ userId: req.user.sub, limit, page, ownerOnly: true , status: requestedStatus,dateFrom: startDate, dateTo: endDate })
+        const { items, total } = await listPosts({ userId: req.user.sub, limit, page, ownerOnly: true , status: requestedStatus,dateFrom: startDate, dateTo: endDate, categoryIds })
         return res.json({ items, page, limit, total })
     }
 
     const userId = req.user?.sub || null
-    const { items, total } = await listPosts({ userId, limit, page, dateFrom: startDate, dateTo: endDate})
+    const { items, total } = await listPosts({ userId, limit, page, dateFrom: startDate, dateTo: endDate, categoryIds })
     res.json({ items, page, limit, total })
 }
 

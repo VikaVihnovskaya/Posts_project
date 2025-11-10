@@ -26,13 +26,15 @@ export async function listPosts({
                                     status,
                                     dateFrom,
                                     dateTo,
+                                    categoryIds
                                 }) {
     // Формируем фильтр по диапазону дат
     const dateFilter = {}
     if (dateFrom) dateFilter.$gte = dateFrom
     if (dateTo) dateFilter.$lte = dateTo
     const hasDateFilter = Object.keys(dateFilter).length > 0
-
+    const hasCategoryFilter = Array.isArray(categoryIds) && categoryIds.length > 0
+    const categoryFilter = hasCategoryFilter ? { categories: { $in: categoryIds } } : null
     let filter = {}
 
     //  1. Если запрошены только свои посты
@@ -65,16 +67,18 @@ export async function listPosts({
         filter = { status: 'published' }
         if (hasDateFilter) filter.publishedAt = dateFilter
     }
+    // Склеиваем с фильтром по категориям через $and, если он есть
+    const finalFilter = categoryFilter ? { $and: [filter, categoryFilter] } : filter
 
     // Выполняем запросы параллельно
     const [items, total] = await Promise.all([
-        Post.find(filter)
+        Post.find(finalFilter)
             .sort({ publishedAt: -1, id: -1 })
             .limit(limit)
             .skip(page * limit)
             .populate('categories', 'name')
             .lean(),
-        Post.countDocuments(filter),
+        Post.countDocuments(finalFilter),
     ])
 
     return { items, total }
