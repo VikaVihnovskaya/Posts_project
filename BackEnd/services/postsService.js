@@ -26,7 +26,8 @@ export async function listPosts({
                                     status,
                                     dateFrom,
                                     dateTo,
-                                    categoryIds
+                                    categoryIds,
+                                    tags
                                 }) {
     // Формируем фильтр по диапазону дат
     const dateFilter = {}
@@ -35,6 +36,16 @@ export async function listPosts({
     const hasDateFilter = Object.keys(dateFilter).length > 0
     const hasCategoryFilter = Array.isArray(categoryIds) && categoryIds.length > 0
     const categoryFilter = hasCategoryFilter ? { categories: { $in: categoryIds } } : null
+    // OR-режим по тегам. Устойчиво к регистру: используем точные regex "^tag$" с флагом i
+    const hasTagFilter = Array.isArray(tags) && tags.length > 0
+    const tagRegexes = hasTagFilter
+         ? tags
+            .map(String)
+            .map(s => s.trim())
+            .filter(Boolean)
+            .map(t => new RegExp(`^${escapeRegex(t)}$`, 'i'))
+           : []
+    const tagFilter = hasTagFilter ? { tags: { $in: tagRegexes } } : null
     let filter = {}
 
     //  1. Если запрошены только свои посты
@@ -68,7 +79,10 @@ export async function listPosts({
         if (hasDateFilter) filter.publishedAt = dateFilter
     }
     // Склеиваем с фильтром по категориям через $and, если он есть
-    const finalFilter = categoryFilter ? { $and: [filter, categoryFilter] } : filter
+    const andParts = [filter]
+    if (categoryFilter) andParts.push(categoryFilter)
+    if (tagFilter) andParts.push(tagFilter)
+    const finalFilter = andParts.length > 1 ? { $and: andParts } : andParts[0]
 
     // Выполняем запросы параллельно
     const [items, total] = await Promise.all([
@@ -104,7 +118,7 @@ export async function createPost({ data, userId }) {
         status,
         userId,
         categories,
-        tags: Array.isArray(tags) ? tags : [tags].filter(Boolean),
+        tags: normalizeTags(tags),
     })
 }
 
@@ -124,11 +138,28 @@ export async function updatePostEntity(post, data) {
         post.categories = categories
     }
     if (tags !== undefined) {
-        post.tags = Array.isArray(tags) ? tags : [tags].filter(Boolean)
+        post.tags = normalizeTags(tags)
     }
     return post
 }
 
 export async function deletePostById(id) {
     return Post.deleteOne({ _id: id })
+}
+// Вспомогательные функции
+function normalizeTags(input) {
+    const arr = Array.isArray(input) ? input : [input]
+    const set = new Set(
+        arr
+                 .map(String)
+                 .map(s => s.trim())
+                 .filter(Boolean)
+                 .map(s => s.toLowerCase())
+       )
+    return Array.from(set)
+}
+
+function escapeRegex(str) {
+    // Экранируем спецсимволы RegExp, чтобы тег совпадал по точному значению
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

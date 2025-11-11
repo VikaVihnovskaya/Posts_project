@@ -38,9 +38,27 @@
             <span>{{ c.name }}</span>
           </label>
         </div>
+        <h3 style="margin-top: 1rem;">Filter by tags</h3>
+        <div class="tags">
+          <div class="chips">
+      <span v-for="t in selectedTags" :key="t" class="chip">
+        {{ t }}
+        <button type="button" class="chip-x" @click="removeTag(t)">×</button>
+      </span>
+          </div>
+          <input
+              type="text"
+              v-model="tagInput"
+              @keydown.enter.prevent="addTag()"
+              placeholder="Type tag and press Enter"
+          />
+          <div class="hint muted">Use Enter to add, or comma to separate multiple tags</div>
+        </div>
         <div class="filter-actions">
           <button class="btn" :disabled="loading" @click="applyFilters">Apply</button>
-          <button class="btn outline" :disabled="loading || (!dateFrom && !dateTo && !selectedCategoryIds.length)" @click="resetFilters">Reset</button>
+          <button class="btn outline"
+                  :disabled="loading || (!dateFrom && !dateTo && !selectedCategoryIds.length && !selectedTags.length)"
+                  @click="resetFilters">Reset</button>
         </div>
       </aside>
       <!-- Правая колонка с лентой -->
@@ -91,6 +109,9 @@ const dateTo = ref('')
 // Категории
 const allCategories = ref([])
 const selectedCategoryIds = ref([])
+// Тэги
+const selectedTags = ref([]) // массив строк тегов
+const tagInput = ref('')     // текст в инпуте для добавления
 
 async function loadCategories() {
   try {
@@ -120,7 +141,14 @@ function normalizeQuery(rawQuery) {
   } else if (typeof rawCategories === 'string' && rawCategories.trim() !== '') {
     categories = rawCategories.split(',').map(s => s.trim()).filter(Boolean)
   }
-
+  // tags — строка "t1,t2" или массив
+  const rawTags = query.tags
+  let tags = []
+  if (Array.isArray(rawTags)) {
+    tags = rawTags.map(String).map(s => s.trim()).filter(Boolean)
+  } else if (typeof rawTags === 'string' && rawTags.trim() !== '') {
+    tags = rawTags.split(',').map(s => s.trim()).filter(Boolean)
+  }
   return {
     // Номер страницы: целое число ≥ 0, по умолчанию 0
     page: Number.isFinite(parsedPage) && parsedPage >= 0 ? parsedPage : 0,
@@ -135,6 +163,7 @@ function normalizeQuery(rawQuery) {
     dateFrom: typeof query.dateFrom === 'string' ? query.dateFrom : '',
     dateTo: typeof query.dateTo === 'string' ? query.dateTo : '',
     categories,
+    tags,
   }
 }
 // Формируем объект query-параметров для запроса
@@ -147,6 +176,9 @@ function buildQuery() {
   if (dateTo.value) query.dateTo = dateTo.value
   if (selectedCategoryIds.value.length) {
     query.categories = selectedCategoryIds.value.join(',')
+  }
+  if (selectedTags.value.length) {
+    query.tags = selectedTags.value.join(',')
   }
   return query
 }
@@ -178,12 +210,13 @@ watch(
     () => route.query,
     (newQuery) => {
       // Преобразуем строковые query в корректные значения (числа, даты и т.п.)
-      const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo, categories } = normalizeQuery(newQuery)
+      const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo, categories, tags } = normalizeQuery(newQuery)
         page.value = queryPage
         limit.value = queryLimit
         dateFrom.value = queryFrom
         dateTo.value = queryTo
         selectedCategoryIds.value = categories
+        selectedTags.value = tags
         load()
       },
     { immediate: true }
@@ -202,14 +235,16 @@ async function updateQuery(partial, { replace = false } = {}) {
   if (endDate) next.dateTo = endDate; else delete next.dateTo
   const categories = partial.categories ?? current.categories
   if (categories && categories.length) next.categories = categories.join(','); else delete next.categories
-
+  const tags = partial.tags ?? current.tags
+  if (tags && tags.length) next.tags = tags.join(','); else delete next.tags
   // Убираем дубликаты
   const same =
       String(route.query.page ?? '') === String(next.page) &&
       String(route.query.limit ?? '') === String(next.limit) &&
       String(route.query.dateFrom ?? '') === String(next.dateFrom ?? '') &&
       String(route.query.dateTo ?? '') === String(next.dateTo ?? '') &&
-      String(route.query.categories ?? '') === String(next.categories ?? '')
+      String(route.query.categories ?? '') === String(next.categories ?? '') &&
+      String(route.query.tags ?? '') === String(next.tags ?? '')
   if (same) return
 
   if (replace) await router.replace({ query: next })
@@ -217,11 +252,25 @@ async function updateQuery(partial, { replace = false } = {}) {
 }
 function applyFilters() {
   // При применении фильтра сбрасываем на первую страницу
-  updateQuery({ page: 0, dateFrom: dateFrom.value, dateTo: dateTo.value, categories: selectedCategoryIds.value})
+  updateQuery({ page: 0, dateFrom: dateFrom.value, dateTo: dateTo.value, categories: selectedCategoryIds.value, tags: selectedTags.value,})
+}
+function addTag() {
+  const raw = tagInput.value || ''
+  const parts = raw.split(',').map(s => s.trim()).filter(Boolean)
+  const set = new Set(selectedTags.value)
+  for (const p of parts) set.add(p)
+  selectedTags.value = Array.from(set)
+  tagInput.value = ''
+}
+function removeTag(t) {
+  selectedTags.value = selectedTags.value.filter(x => x !== t)
 }
 function resetFilters() {
   selectedCategoryIds.value = []
-  updateQuery({ page: 0, dateFrom: '', dateTo: '', categories: [] })
+  selectedTags.value = []
+  dateFrom.value = ''
+  dateTo.value = ''
+  updateQuery({ page: 0, dateFrom: '', dateTo: '', categories: [], tags: [] })
 }
 
 function nextPage() {
@@ -360,5 +409,15 @@ onMounted(async () => {
 .empty {
   text-align: center;
   color: #666;
+}
+.tags { display: flex; flex-direction: column; gap: 0.5rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { background: #eef2; border-radius: 12px; padding: 2px 8px; }
+.chip-x {
+  background: transparent;
+  color: #1a1a1a;
+  border: none;
+  cursor: pointer;
+  margin-left: 6px;
 }
 </style>

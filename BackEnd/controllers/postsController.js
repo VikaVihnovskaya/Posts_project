@@ -35,15 +35,43 @@ export async function getPosts(req, res) {
     categoryIds = categoryIds.filter(id => mongoose.Types.ObjectId.isValid(id))
     if (!categoryIds.length) categoryIds = null
 
+    // Теги: строка "t1,t2" или массив
+    let tags = []
+    const rawTags = req.query.tags
+    if (Array.isArray(rawTags)) {
+        tags = rawTags.map(String).map(s => s.trim()).filter(Boolean)
+    } else if (typeof rawTags === 'string' && rawTags.trim() !== '') {
+        tags = rawTags.split(',').map(s => s.trim()).filter(Boolean)
+    }
+    if (!tags.length) tags = null
+
     // если owner=me — показываем только посты текущего пользователя
     if (requestedOwner === 'me') {
         if (!req.user) return res.status(401).json({ message: 'Unauthorized' })
-        const { items, total } = await listPosts({ userId: req.user.sub, limit, page, ownerOnly: true , status: requestedStatus,dateFrom: startDate, dateTo: endDate, categoryIds })
+        const { items, total } = await listPosts({
+            userId: req.user.sub,
+            limit,
+            page,
+            ownerOnly: true ,
+            status: requestedStatus,
+            dateFrom: startDate,
+            dateTo: endDate,
+            categoryIds,
+            tags
+        })
         return res.json({ items, page, limit, total })
     }
 
     const userId = req.user?.sub || null
-    const { items, total } = await listPosts({ userId, limit, page, dateFrom: startDate, dateTo: endDate, categoryIds })
+    const { items, total } = await listPosts({
+        userId,
+        limit,
+        page,
+        dateFrom: startDate,
+        dateTo: endDate,
+        categoryIds,
+        tags
+    })
     res.json({ items, page, limit, total })
 }
 
