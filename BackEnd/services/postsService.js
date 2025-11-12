@@ -27,7 +27,8 @@ export async function listPosts({
                                     dateFrom,
                                     dateTo,
                                     categoryIds,
-                                    tags
+                                    tags,
+                                    match,
                                 }) {
     // Формируем фильтр по диапазону дат
     const dateFilter = {}
@@ -36,16 +37,33 @@ export async function listPosts({
     const hasDateFilter = Object.keys(dateFilter).length > 0
     const hasCategoryFilter = Array.isArray(categoryIds) && categoryIds.length > 0
     const categoryFilter = hasCategoryFilter ? { categories: { $in: categoryIds } } : null
-    // OR-режим по тегам. Устойчиво к регистру: используем точные regex "^tag$" с флагом i
+        // Режимы сопоставления по тегам: contains | exact | any | all
+        // - contains: подстрока, OR
+        // - exact: точное совпадение, OR
+        // - any: подстрока, OR (синоним contains)
+        // - all: подстрока, AND (каждый термин должен встретиться в каком-либо теге поста)
+    const mode = (typeof match === 'string' ? match.toLowerCase() : 'contains')
     const hasTagFilter = Array.isArray(tags) && tags.length > 0
-    const tagRegexes = hasTagFilter
-         ? tags
-            .map(String)
-            .map(s => s.trim())
-            .filter(Boolean)
-            .map(t => new RegExp(`^${escapeRegex(t)}$`, 'i'))
+    const terms = hasTagFilter
+           ? tags.map(String).map(s => s.trim()).filter(Boolean)
            : []
-    const tagFilter = hasTagFilter ? { tags: { $in: tagRegexes } } : null
+    let tagFilter = null
+    if (hasTagFilter) {
+        const isExact = mode === 'exact'
+        const isAll = mode === 'all'
+        const regexes = terms.map(t => {
+            return isExact
+                ? new RegExp(`^${escapeRegex(t)}$`, 'i')
+                : new RegExp(escapeRegex(t), 'i')
+        })
+        if (isAll) {
+            // AND между терминами: каждый regex должен найтись хотя бы в одном элементе массива tags
+            tagFilter = { $and: regexes.map(r => ({ tags: { $in: [r] } })) }
+        } else {
+            // OR между терминами
+            tagFilter = { tags: { $in: regexes } }
+        }
+    }
     let filter = {}
 
     //  1. Если запрошены только свои посты

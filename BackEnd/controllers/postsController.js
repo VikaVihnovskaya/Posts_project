@@ -44,6 +44,10 @@ export async function getPosts(req, res) {
         tags = rawTags.split(',').map(s => s.trim()).filter(Boolean)
     }
     if (!tags.length) tags = null
+        // Режим сопоставления тегов: contains | exact | any | all
+    const rawMatch = String(req.query.match || '').toLowerCase()
+    const allowed = new Set(['contains', 'exact', 'any', 'all'])
+    const match = allowed.has(rawMatch) ? rawMatch : 'contains'
 
     // если owner=me — показываем только посты текущего пользователя
     if (requestedOwner === 'me') {
@@ -57,7 +61,8 @@ export async function getPosts(req, res) {
             dateFrom: startDate,
             dateTo: endDate,
             categoryIds,
-            tags
+            tags,
+            match,
         })
         return res.json({ items, page, limit, total })
     }
@@ -70,7 +75,8 @@ export async function getPosts(req, res) {
         dateFrom: startDate,
         dateTo: endDate,
         categoryIds,
-        tags
+        tags,
+        match,
     })
     res.json({ items, page, limit, total })
 }
