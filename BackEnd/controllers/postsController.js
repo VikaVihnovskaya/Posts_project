@@ -44,10 +44,29 @@ export async function getPosts(req, res) {
         tags = rawTags.split(',').map(s => s.trim()).filter(Boolean)
     }
     if (!tags.length) tags = null
-        // Режим сопоставления тегов: contains | exact | any | all
+    // Режим сопоставления тегов: contains | exact | any | all
     const rawMatch = String(req.query.match || '').toLowerCase()
     const allowed = new Set(['contains', 'exact', 'any', 'all'])
     const match = allowed.has(rawMatch) ? rawMatch : 'contains'
+    // Сортировка: поддерживает два формата — sort=createdAt:asc|desc и пару sortBy+order
+    const allowedSortBy = new Set(['createdAt'])
+    let sortBy = 'createdAt'
+    let order = -1 // desc
+    //  sort=createdAt:asc|desc
+    const rawSort = typeof req.query.sort === 'string' ? req.query.sort.trim() : ''
+    if (rawSort) {
+        const [field, sortDirection] = rawSort.split(':')
+        if (allowedSortBy.has(field)) sortBy = field
+        order = String(sortDirection).toLowerCase() === 'asc' ? 1 : -1
+    }
+    // sortBy=createdAt&order=asc|desc (приоритетнее, если передан)
+    if (typeof req.query.sortBy === 'string') {
+        const field = req.query.sortBy.trim()
+        if (allowedSortBy.has(field)) sortBy = field
+    }
+    if (typeof req.query.order === 'string') {
+        order = req.query.order.toLowerCase() === 'asc' ? 1 : -1
+    }
 
     // если owner=me — показываем только посты текущего пользователя
     if (requestedOwner === 'me') {
@@ -63,6 +82,8 @@ export async function getPosts(req, res) {
             categoryIds,
             tags,
             match,
+            sortBy,
+            order,
         })
         return res.json({ items, page, limit, total })
     }
@@ -77,6 +98,8 @@ export async function getPosts(req, res) {
         categoryIds,
         tags,
         match,
+        sortBy,
+        order,
     })
     res.json({ items, page, limit, total })
 }

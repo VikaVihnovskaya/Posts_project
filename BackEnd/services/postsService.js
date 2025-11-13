@@ -29,6 +29,8 @@ export async function listPosts({
                                     categoryIds,
                                     tags,
                                     match,
+                                    sortBy = 'createdAt',
+                                    order = -1,
                                 }) {
     // Формируем фильтр по диапазону дат
     const dateFilter = {}
@@ -102,10 +104,26 @@ export async function listPosts({
     if (tagFilter) andParts.push(tagFilter)
     const finalFilter = andParts.length > 1 ? { $and: andParts } : andParts[0]
 
+   // Сортировка. Направление сортировки: 1 — по возрастанию, -1 — по убыванию
+    const sortDirection = order === 1 ? 1 : -1
+// Базовая сортировка (по убыванию ID)
+    let sortOptions = { _id: -1 }
+// Определяем поле сортировки
+    if (sortBy === 'createdAt') {
+        if (ownerOnly) {
+            // Если показываем только свои посты — сортируем по дате создания
+            sortOptions = { createdAt: sortDirection, _id: -1 }
+        } else {
+            // Общая лента:
+            // опубликованные — по дате публикации,свои — по дате создания
+            sortOptions = { publishedAt: sortDirection, createdAt: sortDirection, _id: -1 }
+        }
+    }
+
     // Выполняем запросы параллельно
     const [items, total] = await Promise.all([
         Post.find(finalFilter)
-            .sort({ publishedAt: -1, id: -1 })
+            .sort(sortOptions)
             .limit(limit)
             .skip(page * limit)
             .populate('categories', 'name')

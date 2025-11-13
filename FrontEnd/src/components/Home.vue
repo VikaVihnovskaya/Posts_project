@@ -17,6 +17,14 @@
     <div class="content">
       <!-- Левая панель фильтрации -->
       <aside class="filters">
+        <h3>Sort</h3>
+        <label class="field">
+          <span>By date</span>
+          <select v-model="sort" @change="onSortChange">
+            <option value="createdAt:desc">Newest first</option>
+            <option value="createdAt:asc">Oldest first</option>
+          </select>
+        </label>
         <h3>Filter by date</h3>
         <label class="field">
           <span>From</span>
@@ -26,7 +34,7 @@
           <span>To</span>
           <input type="date" v-model="dateTo" :min="dateFrom || undefined" />
         </label>
-        <h3 style="margin-top: 1rem;">Filter by categories</h3>
+        <h3>Filter by categories</h3>
         <div class="category-list">
           <div v-if="!allCategories.length" class="muted">No categories</div>
           <label v-for="c in allCategories" :key="c._id" class="category-item">
@@ -38,7 +46,7 @@
             <span>{{ c.name }}</span>
           </label>
         </div>
-        <h3 style="margin-top: 1rem;">Filter by tags</h3>
+        <h3>Filter by tags</h3>
         <div class="tags">
           <div class="chips">
       <span v-for="t in selectedTags" :key="t" class="chip">#
@@ -114,7 +122,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.valu
 // Фильтры дат (строки формата YYYY-MM-DD)
 const dateFrom = ref('')
 const dateTo = ref('')
-
+const sort = ref('createdAt:desc')
 // Категории
 const allCategories = ref([])
 const selectedCategoryIds = ref([])
@@ -163,6 +171,21 @@ function normalizeQuery(rawQuery) {
   const rawMatch = typeof query.match === 'string' ? query.match.toLowerCase() : ''
   const allowed = new Set(['contains', 'exact', 'any', 'all'])
   const match = allowed.has(rawMatch) ? rawMatch : 'contains'
+  // sort: поддерживаем newest/oldest и createdAt:desc/asc
+  let normSort = 'createdAt:desc'
+  // Поддержка и старого, и нового формата
+  let rawSort = typeof query.sort === 'string' ? query.sort.trim() : ''
+  if (rawSort === 'newest') rawSort = 'createdAt:desc'
+  if (rawSort === 'oldest') rawSort = 'createdAt:asc'
+  if (rawSort === 'createdAt:asc' || rawSort === 'createdAt:desc') {
+    normSort = rawSort
+  } else if (typeof query.sortBy === 'string') {
+    const by = query.sortBy
+    const order = typeof query.order === 'string' ? query.order.toLowerCase() : 'desc'
+    if (by === 'createdAt') {
+      normSort = order === 'asc' ? 'createdAt:asc' : 'createdAt:desc'
+    }
+  }
   return {
     // Номер страницы: целое число ≥ 0, по умолчанию 0
     page: Number.isFinite(parsedPage) && parsedPage >= 0 ? parsedPage : 0,
@@ -179,6 +202,7 @@ function normalizeQuery(rawQuery) {
     categories,
     tags,
     match,
+    sort: normSort,
   }
 }
 // Формируем объект query-параметров для запроса
@@ -199,6 +223,10 @@ function buildQuery() {
     // Передаём match только если не дефолт, но можно и всегда
     query.match = tagMatch.value
   }
+  if (sort.value?.startsWith('createdAt:')) {
+    query.sortBy = 'createdAt'
+    query.order = sort.value.endsWith(':asc') ? 'asc' : 'desc'
+  }
   return query
 }
 
@@ -217,6 +245,7 @@ async function load() {
     const data = await response.json()
     items.value = Array.isArray(data.items) ? data.items : []
     total.value = data.total || 0
+
   } catch (e) {
     error.value = e.message || 'Error loading posts'
     items.value = []
@@ -229,7 +258,7 @@ watch(
     () => route.query,
     (newQuery) => {
       // Преобразуем строковые query в корректные значения (числа, даты и т.п.)
-      const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo, categories, tags, match } = normalizeQuery(newQuery)
+      const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo, categories, tags, match, sort: querySort } = normalizeQuery(newQuery)
         page.value = queryPage
         limit.value = queryLimit
         dateFrom.value = queryFrom
@@ -237,6 +266,7 @@ watch(
         selectedCategoryIds.value = categories
         selectedTags.value = tags
         tagMatch.value = match
+        sort.value = querySort
         load()
       },
     { immediate: true }
@@ -259,6 +289,8 @@ async function updateQuery(partial, { replace = false } = {}) {
   if (tags && tags.length) next.tags = tags.join(','); else delete next.tags
   const match = partial.match ?? current.match ?? 'contains'
   if (match && match !== 'contains') next.match = match; else delete next.match
+  const nextSort = partial.sort ?? current.sort ?? 'createdAt:desc'
+  if (nextSort) next.sort = nextSort; else delete next.sort
   // Убираем дубликаты
   const same =
       String(route.query.page ?? '') === String(next.page) &&
@@ -267,7 +299,8 @@ async function updateQuery(partial, { replace = false } = {}) {
       String(route.query.dateTo ?? '') === String(next.dateTo ?? '') &&
       String(route.query.categories ?? '') === String(next.categories ?? '') &&
       String(route.query.tags ?? '') === String(next.tags ?? '') &&
-      String(route.query.match ?? '') === String(next.match ?? '')
+      String(route.query.match ?? '') === String(next.match ?? '') &&
+      String(route.query.sort ?? '') === String(next.sort ?? '')
   if (same) return
 
   if (replace) await router.replace({ query: next })
@@ -275,7 +308,7 @@ async function updateQuery(partial, { replace = false } = {}) {
 }
 function applyFilters() {
   // При применении фильтра сбрасываем на первую страницу
-  updateQuery({ page: 0, dateFrom: dateFrom.value, dateTo: dateTo.value, categories: selectedCategoryIds.value, tags: selectedTags.value, match: tagMatch.value,})
+  updateQuery({ page: 0, dateFrom: dateFrom.value, dateTo: dateTo.value, categories: selectedCategoryIds.value, tags: selectedTags.value, match: tagMatch.value, sort: sort.value, })
 }
 function addTag() {
   const raw = tagInput.value || ''
@@ -293,9 +326,14 @@ function resetFilters() {
   selectedTags.value = []
   dateFrom.value = ''
   dateTo.value = ''
-  updateQuery({ page: 0, dateFrom: '', dateTo: '', categories: [], tags: [], match: 'contains' })
+  // Возвращаем сортировку к дефолту
+  sort.value = 'createdAt:desc'
+  updateQuery({ page: 0, dateFrom: '', dateTo: '', categories: [], tags: [], match: 'contains' , sort: sort.value, })
 }
-
+function onSortChange() {
+  // При смене сортировки начинаем с первой страницы
+  updateQuery({ page: 0, sort: sort.value })
+}
 function nextPage() {
   if (page.value < totalPages.value - 1) {
     updateQuery({ page: page.value + 1 })
@@ -319,9 +357,9 @@ onMounted(async () => {
   await loadCategories()
   // Инициализация URL дефолтами при первом заходе (без засорения истории)
   const query = normalizeQuery(route.query)
-  const needsDefaults = route.query.page === undefined || route.query.limit === undefined
+  const needsDefaults = route.query.page === undefined || route.query.limit === undefined || route.query.sort === undefined
   if (needsDefaults) {
-    await updateQuery({ page: query.page, limit: query.limit, dateFrom: query.dateFrom, dateTo: query.dateTo, categories: query.categories }, { replace: true })
+    await updateQuery({ page: query.page, limit: query.limit, dateFrom: query.dateFrom, dateTo: query.dateTo, categories: query.categories, sort: query.sort, }, { replace: true })
   }
 })
 </script>
@@ -357,8 +395,9 @@ onMounted(async () => {
   border-radius: 8px;
   background: #fafafa;
 }
+
 .filters h3 {
-  margin: 0 0 .5rem;
+  margin: 1rem 0 0.5rem;
 }
 .field {
   display: grid;
