@@ -1,6 +1,16 @@
 <template>
   <div class="home">
     <header class="topbar">
+      <div class="searchbar">
+        <span class="search-icon"></span>
+        <input
+            type="search"
+            v-model="search"
+            @input="onSearchInput"
+            :placeholder="'Search by title, category, author'"
+        />
+        <button v-if="search" class="clear" @click="clearSearch" aria-label="Clear search">×</button>
+      </div>
       <div class="auth-actions">
         <template v-if="isAuth">
           <router-link class="btn" to="/profile">Profile</router-link>
@@ -12,6 +22,7 @@
           <router-link class="btn outline" to="/register">Register</router-link>
         </template>
       </div>
+
     </header>
     <h1>Welcome to the list of posts! </h1>
     <div class="content">
@@ -118,6 +129,9 @@ const page = ref(0)
 const limit = ref(10)
 const total = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)))
+// Поле поиска
+const search = ref('')
+let searchTimer = null
 
 // Фильтры дат (строки формата YYYY-MM-DD)
 const dateFrom = ref('')
@@ -144,6 +158,19 @@ async function loadCategories() {
     console.warn('Error loading categories:', e)
     allCategories.value = []
   }
+}
+function onSearchInput() {
+  // легкий debounce, чтобы не спамить URL/запросы при наборе
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    const q = (search.value || '').trim()
+    updateQuery({ page: 0, q })
+  }, 400)
+}
+
+function clearSearch() {
+  search.value = ''
+  updateQuery({ page: 0, q: '' })
 }
 // Чтение и запись query
 function normalizeQuery(rawQuery) {
@@ -186,6 +213,7 @@ function normalizeQuery(rawQuery) {
       normSort = order === 'asc' ? 'createdAt:asc' : 'createdAt:desc'
     }
   }
+  const q = typeof query.q === 'string' ? query.q : ''
   return {
     // Номер страницы: целое число ≥ 0, по умолчанию 0
     page: Number.isFinite(parsedPage) && parsedPage >= 0 ? parsedPage : 0,
@@ -203,6 +231,7 @@ function normalizeQuery(rawQuery) {
     tags,
     match,
     sort: normSort,
+    q,
   }
 }
 // Формируем объект query-параметров для запроса
@@ -227,6 +256,8 @@ function buildQuery() {
     query.sortBy = 'createdAt'
     query.order = sort.value.endsWith(':asc') ? 'asc' : 'desc'
   }
+  const q = (search.value || '').trim()
+  if (q) query.q = q
   return query
 }
 
@@ -258,7 +289,7 @@ watch(
     () => route.query,
     (newQuery) => {
       // Преобразуем строковые query в корректные значения (числа, даты и т.п.)
-      const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo, categories, tags, match, sort: querySort } = normalizeQuery(newQuery)
+      const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo, categories, tags, match, sort: querySort, q } = normalizeQuery(newQuery)
         page.value = queryPage
         limit.value = queryLimit
         dateFrom.value = queryFrom
@@ -267,6 +298,7 @@ watch(
         selectedTags.value = tags
         tagMatch.value = match
         sort.value = querySort
+        search.value = q || ''
         load()
       },
     { immediate: true }
@@ -291,6 +323,8 @@ async function updateQuery(partial, { replace = false } = {}) {
   if (match && match !== 'contains') next.match = match; else delete next.match
   const nextSort = partial.sort ?? current.sort ?? 'createdAt:desc'
   if (nextSort) next.sort = nextSort; else delete next.sort
+  const q = typeof partial.q === 'string' ? partial.q : current.q
+  if (q && q.trim()) next.q = q.trim(); else delete next.q
   // Убираем дубликаты
   const same =
       String(route.query.page ?? '') === String(next.page) &&
@@ -300,7 +334,8 @@ async function updateQuery(partial, { replace = false } = {}) {
       String(route.query.categories ?? '') === String(next.categories ?? '') &&
       String(route.query.tags ?? '') === String(next.tags ?? '') &&
       String(route.query.match ?? '') === String(next.match ?? '') &&
-      String(route.query.sort ?? '') === String(next.sort ?? '')
+      String(route.query.sort ?? '') === String(next.sort ?? '') &&
+      String(route.query.q ?? '') === String(next.q ?? '')
   if (same) return
 
   if (replace) await router.replace({ query: next })
@@ -328,7 +363,8 @@ function resetFilters() {
   dateTo.value = ''
   // Возвращаем сортировку к дефолту
   sort.value = 'createdAt:desc'
-  updateQuery({ page: 0, dateFrom: '', dateTo: '', categories: [], tags: [], match: 'contains' , sort: sort.value, })
+  search.value = ''
+  updateQuery({ page: 0, dateFrom: '', dateTo: '', categories: [], tags: [], match: 'contains' , sort: sort.value,  q: ''})
 }
 function onSortChange() {
   // При смене сортировки начинаем с первой страницы
@@ -372,14 +408,53 @@ onMounted(async () => {
 }
 .topbar {
   display: flex;
-  justify-content: end;
+  justify-content: flex-end;
   align-items: center;
   margin-bottom: 1rem;
+  gap: .75rem;
 }
 .auth-actions {
   display: flex;
   gap: .5rem;
   align-items: center;
+}
+.searchbar {
+  position: relative;
+  flex: 1;
+  max-width: 500px;
+}
+.searchbar .search-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #777;
+  pointer-events: none;
+}
+.search-icon {
+  width: 18px;
+  height: 18px;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat center;
+  background: #777;
+}
+.searchbar input[type="search"] {
+  width: 100%;
+  padding: 8px 28px 8px 32px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #ffffff;
+}
+.searchbar .clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #1a1a1a;
 }
 .content {
   display: grid;
