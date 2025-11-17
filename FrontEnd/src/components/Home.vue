@@ -7,7 +7,7 @@
             type="search"
             v-model="search"
             @input="onSearchInput"
-            :placeholder="'Search by title, category, author'"
+            :placeholder="'Search ...'"
         />
         <button v-if="search" class="clear" @click="clearSearch" aria-label="Clear search">×</button>
       </div>
@@ -109,7 +109,6 @@
    </div>
   </div>
 </template>
-
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -290,17 +289,17 @@ watch(
     (newQuery) => {
       // Преобразуем строковые query в корректные значения (числа, даты и т.п.)
       const { page: queryPage, limit: queryLimit, dateFrom: queryFrom, dateTo: queryTo, categories, tags, match, sort: querySort, q } = normalizeQuery(newQuery)
-        page.value = queryPage
-        limit.value = queryLimit
-        dateFrom.value = queryFrom
-        dateTo.value = queryTo
-        selectedCategoryIds.value = categories
-        selectedTags.value = tags
-        tagMatch.value = match
-        sort.value = querySort
-        search.value = q || ''
-        load()
-      },
+      page.value = queryPage
+      limit.value = queryLimit
+      dateFrom.value = queryFrom
+      dateTo.value = queryTo
+      selectedCategoryIds.value = categories
+      selectedTags.value = tags
+      tagMatch.value = match
+      sort.value = querySort
+      search.value = q || ''
+      load()
+    },
     { immediate: true }
 )
 async function updateQuery(partial, { replace = false } = {}) {
@@ -399,6 +398,8 @@ onMounted(async () => {
   }
 })
 </script>
+
+
 
 <style scoped>
 .home {

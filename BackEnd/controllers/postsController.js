@@ -67,7 +67,8 @@ export async function getPosts(req, res) {
     if (typeof req.query.order === 'string') {
         order = req.query.order.toLowerCase() === 'asc' ? 1 : -1
     }
-
+    //  поиск
+    const q = (req.query.q || '').trim()
     // если owner=me — показываем только посты текущего пользователя
     if (requestedOwner === 'me') {
         if (!req.user) return res.status(401).json({ message: 'Unauthorized' })
@@ -84,6 +85,7 @@ export async function getPosts(req, res) {
             match,
             sortBy,
             order,
+            q,
         })
         return res.json({ items, page, limit, total })
     }
@@ -100,6 +102,7 @@ export async function getPosts(req, res) {
         match,
         sortBy,
         order,
+        q,
     })
     res.json({ items, page, limit, total })
 }

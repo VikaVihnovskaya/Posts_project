@@ -18,6 +18,23 @@ async function assertCategoriesExist(categoryIds) {
         throw err
     }
 }
+// Вспомогательные функции
+function normalizeTags(input) {
+    const arr = Array.isArray(input) ? input : [input]
+    const set = new Set(
+        arr
+            .map(String)
+            .map(s => s.trim())
+            .filter(Boolean)
+            .map(s => s.toLowerCase())
+    )
+    return Array.from(set)
+}
+
+function escapeRegex(str) {
+    // Экранируем спецсимволы RegExp, чтобы тег совпадал по точному значению
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 export async function listPosts({
                                     userId,
                                     limit,
@@ -31,6 +48,7 @@ export async function listPosts({
                                     match,
                                     sortBy = 'createdAt',
                                     order = -1,
+                                    q,
                                 }) {
     // Формируем фильтр по диапазону дат
     const dateFilter = {}
@@ -97,6 +115,15 @@ export async function listPosts({
     } else {
         filter = { status: 'published' }
         if (hasDateFilter) filter.publishedAt = dateFilter
+    }
+    // Поиск по q: title, author (строка)
+    const qTrim = (q || '').trim()
+    if (qTrim) {
+        const rx = new RegExp(escapeRegex(qTrim), 'i')
+        filter.$or = (filter.$or || []).concat([
+            { title: rx },
+            { author: rx },
+        ])
     }
     // Склеиваем с фильтром по категориям через $and, если он есть
     const andParts = [filter]
@@ -181,21 +208,4 @@ export async function updatePostEntity(post, data) {
 
 export async function deletePostById(id) {
     return Post.deleteOne({ _id: id })
-}
-// Вспомогательные функции
-function normalizeTags(input) {
-    const arr = Array.isArray(input) ? input : [input]
-    const set = new Set(
-        arr
-                 .map(String)
-                 .map(s => s.trim())
-                 .filter(Boolean)
-                 .map(s => s.toLowerCase())
-       )
-    return Array.from(set)
-}
-
-function escapeRegex(str) {
-    // Экранируем спецсимволы RegExp, чтобы тег совпадал по точному значению
-    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

@@ -24,6 +24,7 @@ const postSchema = new mongoose.Schema({
         type: String,
         trim: true,
         default: "",
+        index: true,
     },
     status: {
         type: String,
@@ -48,6 +49,7 @@ const postSchema = new mongoose.Schema({
             validator: (v) => Array.isArray(v) && v.length > 0,
             message: 'At least one category is required',
         },
+        index: true,
     },
     comments: [{
         type: Schema.Types.ObjectId,
@@ -76,5 +78,6 @@ const postSchema = new mongoose.Schema({
         default: [],
     },
 }, {timestamps: true});
-
+postSchema.index({ createdAt: -1 });
+postSchema.index({ title: 'text', author: 'text' }, { name: 'Post_text_search' })
 export default mongoose.model("Post", postSchema)
