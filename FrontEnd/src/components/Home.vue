@@ -1,6 +1,10 @@
 <template>
   <div class="home">
     <header class="topbar">
+      <router-link to="/" class="logo" aria-label="Home">
+        <img src="/logo.png" alt="Logo" />
+        <span>ViPost</span>
+      </router-link>
       <div class="searchbar">
         <span class="search-icon"></span>
         <input
@@ -409,10 +413,26 @@ onMounted(async () => {
 }
 .topbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
   gap: .75rem;
+}
+.logo {
+  display: flex;
+  align-items: center;
+}
+.logo img {
+  display: block;
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+.logo span {
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-family: 'Roboto', sans-serif;
+  color: #2a9d6f;
 }
 .auth-actions {
   display: flex;
