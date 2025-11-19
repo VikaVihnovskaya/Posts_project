@@ -31,6 +31,29 @@
           </div>
         </form>
       </div>
+      <section class="pref-card">
+        <h3>Preferred categories</h3>
+        <p class="subtitle">Choose categories you want to see first on the home page.</p>
+
+        <div v-if="pref.loading">Loading categories…</div>
+        <template v-else>
+          <div class="category-list">
+            <label v-for="c in pref.categories" :key="c._id" class="category-item">
+              <input type="checkbox" :value="String(c._id)" v-model="localSelection" />
+              <span>{{ c.name }}</span>
+            </label>
+          </div>
+          <div class="actions">
+            <button class="btn" :disabled="pref.saving || !isDirty" @click="onSavePrefs">
+              {{ prefButtonText }}
+            </button>
+            <button class="btn outline" :disabled="pref.saving || localSelection.length === 0" @click="onResetPrefs">
+              Reset
+            </button>
+            <span v-if="pref.error" class="error">{{ pref.error }}</span>
+          </div>
+        </template>
+      </section>
       <h3>My Posts</h3>
       <p class="subtitle">Your drafts and published posts</p>
       <div class="filters">
@@ -71,6 +94,7 @@ import {computed, onMounted, reactive, ref, watch, watchEffect} from 'vue'
 import {useAuthStore} from '../stores/auth'
 import {useRoute, useRouter} from 'vue-router'
 import PostCard from './PostCard.vue'
+import { usePreferencesStore } from '../stores/preferences'
 
 const auth = useAuthStore()
 const user = computed(() => auth.user)
@@ -80,6 +104,8 @@ watchEffect(() => {
   form.email = user.value?.email || ''
   form.about = user.value?.about || ''
 })
+const pref = usePreferencesStore()
+const localSelection = ref([])
 const route = useRoute()
 const router = useRouter()
 const saving = ref(false)
@@ -159,6 +185,39 @@ async function saveUserProfile() {
   } finally {
     saving.value = false
   }
+}
+onMounted(async () => {
+  // подгружаем категории и текущие предпочтения
+  await pref.init()
+  localSelection.value = [...pref.selectedCategoryIds]
+})
+
+watch(() => pref.selectedCategoryIds, (val) => {
+  localSelection.value = [...val]
+}, { deep: true })
+
+const isDirty = computed(() => {
+  const a = localSelection.value.map(String)
+  const b = (pref.selectedCategoryIds || []).map(String)
+  if (a.length !== b.length) return true
+  const setA = new Set(a)
+  return b.some(id => !setA.has(id))
+})
+const hasPrefs = computed(() => (pref.selectedCategoryIds?.length || 0) > 0)
+
+const prefButtonText = computed(() => {
+  if (pref.saving) return 'Saving…'
+  // Если есть несохранённые изменения — показываем "Save preferences"
+  if (isDirty.value) return 'Save preferences'
+  // Если изменений нет — показываем "Change preferences", когда prefs уже сохранены
+  return hasPrefs.value ? 'Change preferences' : 'Save preferences'
+})
+async function onSavePrefs() {
+  await pref.save([...localSelection.value])
+}
+async function onResetPrefs() {
+  await pref.reset()
+  localSelection.value = []
 }
 async function loadMyPosts({ allowAdjust = true } = {}) {
   myLoading.value = true
@@ -366,6 +425,7 @@ watch(
   display: flex;
   justify-content: end;
   margin-top: 16px;
+  gap: 12px;
 }
 .feed {
   display: grid;
@@ -397,6 +457,11 @@ watch(
   border-radius: 4px;
   margin: 0.5rem 0 1rem;
 }
+.pref-card { margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; }
+.category-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin: 12px 0; }
+.category-item { display: flex; align-items: center; gap: 8px; }
+
+.error { color: #b00020; margin-left: 8px; }
 @media (max-width: 860px){
   .grid {
     grid-template-columns: 1fr;

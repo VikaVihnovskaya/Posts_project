@@ -2,6 +2,7 @@ import { parsePaging } from '../utils/paging.js'
 import { reconcilePublishFields } from '../utils/publishCheck.js'
 import { listPosts, getPostById, createPost, updatePostEntity, deletePostById } from '../services/postsService.js'
 import mongoose from "mongoose";
+import User from "../models/User.js"
 
 export async function getPosts(req, res) {
     const { limit, page } = parsePaging(req)
@@ -89,8 +90,12 @@ export async function getPosts(req, res) {
         })
         return res.json({ items, page, limit, total })
     }
-
     const userId = req.user?.sub || null
+    let preferredCategoryIds = []
+    if (req.user?.sub) {
+        const userCategoryPrefs = await User.findById(req.user.sub).select('preferredCategoryIds').lean()
+        preferredCategoryIds = userCategoryPrefs?.preferredCategoryIds || []
+    }
     const { items, total } = await listPosts({
         userId,
         limit,
@@ -103,6 +108,7 @@ export async function getPosts(req, res) {
         sortBy,
         order,
         q,
+        preferredCategoryIds,
     })
     res.json({ items, page, limit, total })
 }

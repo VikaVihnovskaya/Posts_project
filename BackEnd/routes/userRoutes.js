@@ -6,6 +6,7 @@ import {errorHandler} from "../middleware/errorHandler.js";
 import {verifyToken} from "../middleware/verifyToken.js";
 import upload from "../middleware/uploadMiddleware.js";
 import { buildPublicUrl, uploadBufferToS3 } from "../utils/s3.js";
+import Category from "../models/Category.js";
 
 const router = express.Router();
 
@@ -146,6 +147,51 @@ router.get("/check", verifyToken, async (req, res, next) => {
         if (!user) return res.status(404).json({ message: "User not found" });
         const { _id, login, name = '', email = '', about = '', avatarUrl = '' } = user;
         res.json({ id: _id, login, name, email, about, avatarUrl });
+    } catch (e) { next(e); }
+});
+// GET /api/users/preferences — получить массив ObjectId предпочтительных категорий
+router.get('/preferences', verifyToken, async (req, res, next) => {
+    try {
+        const user = await User.findById(req.user.sub).select('preferredCategoryIds').lean();
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        res.json(user.preferredCategoryIds || []);
+    } catch (e) { next(e); }
+});
+
+// PUT /api/users/preferences — сохранить список предпочтений
+router.put('/preferences', verifyToken, async (req, res, next) => {
+    try {
+        const { categoryIds } = req.body || {};
+        if (!Array.isArray(categoryIds)) {
+            return res.status(400).json({ message: 'categoryIds must be an array' });
+        }
+        // нормализуем и уникализируем
+        const uniqIds = Array.from(new Set(categoryIds.map(String)));
+        // валидация существования категорий
+        const count = await Category.countDocuments({ _id: { $in: uniqIds } });
+        if (count !== uniqIds.length) {
+            return res.status(400).json({ message: 'Some categoryIds are invalid' });
+        }
+        const user = await User.findByIdAndUpdate(
+            req.user.sub,
+            { $set: { preferredCategoryIds: uniqIds } },
+            { new: true, select: 'preferredCategoryIds' }
+        ).lean();
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        res.json(user.preferredCategoryIds);
+    } catch (e) { next(e); }
+});
+
+// DELETE /api/users/preferences — очистить предпочтения
+router.delete('/preferences', verifyToken, async (req, res, next) => {
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.user.sub,
+            { $set: { preferredCategoryIds: [] } },
+            { new: true, select: 'preferredCategoryIds' }
+        ).lean();
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        res.json(user.preferredCategoryIds); // []
     } catch (e) { next(e); }
 });
 router.use(errorHandler)

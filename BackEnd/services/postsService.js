@@ -49,6 +49,7 @@ export async function listPosts({
                                     sortBy = 'createdAt',
                                     order = -1,
                                     q,
+                                    preferredCategoryIds = [],
                                 }) {
     // Формируем фильтр по диапазону дат
     const dateFilter = {}
@@ -56,7 +57,10 @@ export async function listPosts({
     if (dateTo) dateFilter.$lte = dateTo
     const hasDateFilter = Object.keys(dateFilter).length > 0
     const hasCategoryFilter = Array.isArray(categoryIds) && categoryIds.length > 0
-    const categoryFilter = hasCategoryFilter ? { categories: { $in: categoryIds } } : null
+    const categoryIdsObj = hasCategoryFilter
+        ? categoryIds.map(id => (id instanceof Types.ObjectId ? id : new Types.ObjectId(String(id))))
+        : []
+    const categoryFilter = hasCategoryFilter ? { categories: { $in: categoryIdsObj } } : null
         // Режимы сопоставления по тегам: contains | exact | any | all
         // - contains: подстрока, OR
         // - exact: точное совпадение, OR
@@ -133,18 +137,50 @@ export async function listPosts({
 
    // Сортировка. Направление сортировки: 1 — по возрастанию, -1 — по убыванию
     const sortDirection = order === 1 ? 1 : -1
-// Базовая сортировка (по убыванию ID)
+// Базовая сортировка для "обычного" пути (оставляем как есть)
     let sortOptions = { _id: -1 }
-// Определяем поле сортировки
     if (sortBy === 'createdAt') {
         if (ownerOnly) {
-            // Если показываем только свои посты — сортируем по дате создания
             sortOptions = { createdAt: sortDirection, _id: -1 }
         } else {
-            // Общая лента:
-            // опубликованные — по дате публикации,свои — по дате создания
             sortOptions = { publishedAt: sortDirection, createdAt: sortDirection, _id: -1 }
         }
+    }
+
+    const hasPrefs = Array.isArray(preferredCategoryIds) && preferredCategoryIds.length > 0
+
+    if (hasPrefs) {
+        // Приводим ID к ObjectId на всякий случай
+        const prefIds = preferredCategoryIds.map(id => id instanceof Types.ObjectId ? id : new Types.ObjectId(String(id)))
+
+           // Единое поле даты: publishedAt ?? createdAt
+        const pipeline = [
+            { $match: finalFilter },
+            { $addFields: {
+                    effectiveDate: { $ifNull: ['$publishedAt', '$createdAt'] },
+                    preferredRank: {
+                        $cond: [
+                            { $gt: [ { $size: { $setIntersection: ['$categories', prefIds] } }, 0 ] },
+                            0,
+                            1,
+                        ],
+                    },
+                }
+            },
+            // ВАЖНО: порядок ключей в $sort — именно такой
+            { $sort: { preferredRank: 1, effectiveDate: sortDirection, _id: sortDirection } },
+            { $skip: page * limit },
+            { $limit: limit },
+            { $lookup: { from: 'categories', localField: 'categories', foreignField: '_id', as: 'categories' } },
+            { $project: { preferredRank: 0, effectiveDate: 0 } },
+        ]
+
+        const [items, total] = await Promise.all([
+            Post.aggregate(pipeline),
+            Post.countDocuments(finalFilter),
+        ])
+
+        return { items, total }
     }
 
     // Выполняем запросы параллельно

@@ -32,6 +32,7 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    preferredCategoryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category', index: true, default: [] }],
 }, { timestamps: true });
 
 
