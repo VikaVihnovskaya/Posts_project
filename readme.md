@@ -171,6 +171,7 @@ Backend receives the following variables:
   - src/components — pages and components (Home.vue, PostView.vue, Profile.vue, CreatePost.vue, LoginUser.vue, RegisterUser.vue, PostCard.vue, …)
   - src/router/index.js — routing
   - src/stores — Pinia stores (auth, preferences)
+
 - BackEnd — Node.js (Express) server
   - routes — API routes (posts, users, categories, comments, uploads)
   - controllers, services, middleware, models, utils — app layers
@@ -188,3 +189,11 @@ Backend receives the following variables:
 
 
 
+
+## Detailed backend documentation
+For a deeper explanation of the backend architecture, endpoints, authentication flow, file uploads, pagination, health checks and troubleshooting, see:
+- BackEnd/README.md
+
+## Detailed frontend documentation
+For a deeper explanation of the frontend architecture, key files, styles, API interaction and troubleshooting, see:
+- FrontEnd/README.md
