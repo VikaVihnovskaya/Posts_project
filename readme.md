@@ -77,7 +77,7 @@ ViPost is structured into four main layers — **Frontend (Vue 3)**, **Backend (
 ### 2. Backend (Node.js + Express)
 - **Framework:** Express.js providing RESTful API endpoints.
 - **Application layers:**
-    - **Routes** — define API endpoints (`/posts`, `/users`, `/comments`, `/uploads`).
+    - **Routes** — define API endpoints (`/posts`, `/users`, `/comments`, `/category`).
     - **Controllers** — handle request logic.
     - **Services** — interact with MongoDB and MinIO.
     - **Models** — Mongoose schemas for users, posts, comments.
