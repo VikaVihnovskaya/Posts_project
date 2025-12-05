@@ -9,6 +9,10 @@ This document explains how the Node.js backend is organized, how requests flow t
 
 
 ## High‑level flow
+
+**Terminology:**  
+The *high‑level flow* describes how a request moves through the backend layers — from routes and middleware to controllers, services, and models — before returning a response.
+
 1) Client sends HTTP request to Express route (e.g., GET /api/posts).
 2) Route attaches middlewares (auth, validation, uploads), then calls a controller.
 3) Controller orchestrates: parses input, calls a service for business logic, and returns a response.
@@ -17,26 +21,34 @@ This document explains how the Node.js backend is organized, how requests flow t
 
 
 ## Entry point
-- BackEnd/index.js
+
+**Terminology:**  
+The *entry point* is the file that boots the backend application, initializes core services, and mounts routes.
+
+- **File:** `BackEnd/index.js`
   - Boots Express app and core middlewares (CORS, JSON parsing, cookie parser).
   - Mounts routers:
-    - /api/users → routes/userRoutes.js
-    - /api/posts → routes/postRoutes.js
-    - /api/categories → routes/categoryRoutes.js
+    - `/api/users `→ `routes/userRoutes.js`
+    - `/api/posts` → `routes/postRoutes.js`
+    - `/api/categories` → `routes/categoryRoutes.js`
   - Initializes S3 client and ensures the bucket exists and is public for object reads.
   - Exposes health endpoints:
-    - GET /health/live → quick liveness probe
-    - GET /health/ready → checks Mongo connectivity and S3 availability
+    - `GET /health/live `→ quick liveness probe
+    - `GET /health/ready `→ checks Mongo connectivity and S3 availability
   - Reads configuration from environment variables (see below).
 
 
 ## Folders overview
-- routes/ — Express route definitions, compose middlewares and controller calls.
-- controllers/ — Request handlers: validate inputs at a high level, call services, shape HTTP responses.
-- services/ — Business logic and integration with data stores (Mongo, S3). Contains reusable operations.
-- models/ — Mongoose schemas and models for MongoDB collections (User, Post, Comment, Category).
-- middleware/ — Reusable Express middlewares: auth (JWT), validation, error handling, uploads.
-- utils/ — Helper modules for cross‑cutting concerns (S3 client, pagination helpers, publish checks).
+
+**Terminology:**  
+The *folders overview* explains the purpose of each backend directory.
+
+- **routes/** — Express route definitions, compose middlewares and controller calls.
+- **controllers/** — Request handlers: validate inputs at a high level, call services, shape HTTP responses.
+- **services/** — Business logic and integration with data stores (Mongo, S3). Contains reusable operations.
+- **models/** — Mongoose schemas and models for MongoDB collections (User, Post, Comment, Category).
+- **middleware/** — Reusable Express middlewares: auth (JWT), validation, error handling, uploads.
+- **utils/** — Helper modules for cross‑cutting concerns (S3 client, pagination helpers, publish checks).
 
 
 ## Key files by folder
@@ -101,14 +113,20 @@ This document explains how the Node.js backend is organized, how requests flow t
 
 
 ## Environment variables (BackEnd)
-- PORT — Express port (default 3000)
-- MONGO_URL — MongoDB connection string
-- JWT_SECRET — secret used for JWT signing
-- S3_ENDPOINT — MinIO/S3 endpoint URL (e.g., http://minio:9002)
-- S3_ACCESS_KEY — access key for MinIO/S3
-- S3_SECRET_KEY — secret key for MinIO/S3
-- S3_BUCKET — bucket name for images (default: posts)
-- S3_PUBLIC_URL — base public URL to serve images (defaults to S3_ENDPOINT if not set)
+
+**Terminology:**  
+*Environment variables* configure the backend at runtime — database, storage, authentication, and ports.
+
+| Variable       | Purpose                          | Example                     |
+|----------------|----------------------------------|-----------------------------|
+| PORT           | Express port                     | 3000                        |
+| MONGO_URL      | MongoDB connection string        | mongodb://mongo:27017/mydb  |
+| JWT_SECRET     | Secret for JWT signing           | mysecret                    |
+| S3_ENDPOINT    | MinIO/S3 endpoint URL            | http://minio:9002           |
+| S3_ACCESS_KEY  | Access key for MinIO/S3          | minio                       |
+| S3_SECRET_KEY  | Secret key for MinIO/S3          | miniopass                   |
+| S3_BUCKET      | Bucket name for images           | posts                       |
+| S3_PUBLIC_URL  | Public URL for serving images    | http://localhost:9002       |
 
 
 ## Health checks
@@ -162,6 +180,10 @@ Example:
 
 
 ## API endpoints catalog (short)
+
+**Terminology:**  
+*API endpoints* define the available routes for interacting with users, posts, comments, categories, and health checks.
+
 Users
 - POST /api/users/create — register user
 - POST /api/users/login — sign in (sets cookie)
@@ -221,6 +243,10 @@ If a user is authenticated and has preferred categories, results prioritize thos
 
 
 ## Error responses
+
+**Terminology:**  
+*Error responses* are standardized JSON outputs with HTTP status codes.
+
 All errors are returned as JSON with an appropriate HTTP status. Common statuses:
 - 400 Bad Request — validation errors
 - 401 Unauthorized — missing/invalid token or wrong credentials
@@ -257,6 +283,9 @@ HTTP status 200 when both are true; 503 otherwise.
 
 
 ## Troubleshooting
+
+**Terminology:**
+*Troubleshooting* lists common issues and fixes for MongoDB, MinIO, authentication, and validation.
 - MongoDB connection fails on Docker
   - Ensure docker‑compose is up and MONGO_URL points to mongodb://mongo:27017/<db>.
   - Check container logs for the backend and Mongo.
