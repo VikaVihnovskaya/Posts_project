@@ -9,17 +9,24 @@ This folder contains the Vue 3 client application for ViPost. It provides the po
 
 
 ## Quick start
+
+**Terminology:**  
+*Quick start* provides minimal steps to run the frontend locally.
+
 - npm install
-- npm run dev (default http://localhost:5173)
-- npm run build
-- npm run preview
+- npm run dev      # Start Vite dev server (http://localhost:5173)
+- npm run build    # Production build
+- npm run preview  # Preview production build locally
 
 ---
 
 ## High‑level flow
-1) index.html bootstraps the app and loads src/main.js.
-2) main.js creates the Vue app, installs Pinia and the Router, and mounts App.vue.
-3) App.vue renders <router-view/>, which displays a page component based on the current route.
+**Terminology:**
+
+The *high-level* flow describes how the frontend initializes, mounts components, and interacts with the backend API.
+1) `index.html` bootstraps the app and loads `src/main.js`.
+2) `main.js` creates the Vue app, installs Pinia and the Router, and mounts `App.vue`.
+3) `App.vue` renders `<router-view/>`, which displays a page component based on the current route.
 4) Router guards check auth (via Pinia store) for protected pages before navigation.
 5) Components (pages) fetch data from the Backend API (via fetch with credentials where needed) and render UI.
 
@@ -62,31 +69,37 @@ FrontEnd/
 │    └── utils/ (Optional future improvement)
 └── vite.config.js
 ```
-- src/components — pages and reusable components
-- src/router — Vue Router configuration and navigation guards
-- src/stores — Pinia stores (auth state, user preferences)
-- src/style.css — global styles
-- public/ — static assets served as-is at the site root (e.g., /logo.png)
+- `src/components` — pages and reusable components
+- `src/router` — Vue Router configuration and navigation guards
+- `src/stores` — Pinia stores (auth state, user preferences)
+- `src/style.css` — global styles
+- `public/` — static assets served as-is at the site root (e.g., /logo.png)
 
 
 ## Routing
-Vue Router is configured in src/router/index.js.
-- File: src/router/index.js
-  - Declares routes:
-    - / (Home) → components/Home.vue
-    - /posts/:id (PostView) → components/PostView.vue
-    - /profile (requiresAuth) → components/Profile.vue
-    - /create (requiresAuth) → components/CreatePost.vue
-    - /login → components/LoginUser.vue
-    - /register → components/RegisterUser.vue
+**Terminology:**
+*Routing* defines the mapping between URL paths and Vue components, with guards for authentication.
 
-  - Global beforeEach guard:
-    - Tries to restore session once on first navigation via auth.checkAuth().
-    - If route has meta.requiresAuth and no user, redirects to Login with redirect=<target>.
-    - If already authenticated and going to Login/Register — redirects to redirect or /profile.
+| Path        | Component         | Auth Requirement |
+|-------------|------------------|------------------|
+| `/`         | Home.vue          | Public           |
+| `/posts/:id`| PostView.vue      | Public           |
+| `/profile`  | Profile.vue       | Requires Auth    |
+| `/create`   | CreatePost.vue    | Requires Auth    |
+| `/login`    | LoginUser.vue     | Public           |
+| `/register` | RegisterUser.vue  | Public           |
+
+
+  - Navigation guards:
+    - Restores session via `auth.checkAuth()` on first navigation.
+    - Redirects unauthenticated users to `/login?redirect=<target>`.
+    - Redirects authenticated users away from `/login` or /`register` to `/profile`.
 
 
 ## State management (Pinia stores)
+**Terminology:**
+*State management* centralizes application state and API calls using Pinia.
+
 - File: src/stores/auth.js (useAuthStore)
   - State: user, loading
   - Getters: isAuthenticated
@@ -141,12 +154,18 @@ Vue Router is configured in src/router/index.js.
 
 
 ## Styles
+**Terminology:**
+*Style* define the visual presentation of the frontend.
+
 - Global CSS: src/style.css (base styles, layout helpers, variables).
 - Scoped CSS: each .vue component may include its own <style scoped> section.
 - Third-party styles: vue-multiselect styles imported in main.js.
 
 
 ## API interaction
+**Terminology:**
+*API interaction* describes how the frontend communicates with the backend.
+
 - Plain fetch is used directly in stores/components.
 - For authenticated endpoints, credentials: 'include' is set to send cookies.
 - Expected backend base URL in development: relative /api/* proxied by Docker or Vite dev server configuration.
@@ -173,24 +192,6 @@ From the repository root:
 - Use lazy-loaded routes (dynamic imports) to split code by page.
 
 ---
-
-## Table of contents
-- High‑level flow
-- Entry files
-- Folders overview
-- Routing
-- State management
-- Key components (pages)
-- Styles
-- API interaction
-- Assets
-- Development scripts
-- Tips and conventions
-- How feed filters and search work
-- Auth and session: how it’s checked and used
-- Typical user journeys
-- Troubleshooting and common pitfalls
-
 
 ## How feed filters and search work
 The Home page combines multiple inputs into a single query to the backend:
