@@ -301,8 +301,8 @@ Backend receives the following variables:
 
 ## Detailed backend documentation
 For a deeper explanation of the backend architecture, endpoints, authentication flow, file uploads, pagination, health checks and troubleshooting, see:
-- `BackEnd/README.md`
+- `BackEnd/BackREADME.md`
 
 ## Detailed frontend documentation
 For a deeper explanation of the frontend architecture, key files, styles, API interaction and troubleshooting, see:
-- `FrontEnd/README.md`
+- `FrontEnd/FrontREADME.md`
