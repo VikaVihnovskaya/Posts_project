@@ -161,10 +161,22 @@ export async function listPosts({
     const qTrim = (q || '').trim()
     if (qTrim) {
         const rx = new RegExp(escapeRegex(qTrim), 'i')
-        filter.$or = (filter.$or || []).concat([
-            { title: rx },
-            { author: rx },
-        ])
+
+        // Если уже есть $or (например, для авторизованных пользователей: published OR my posts)
+        if (Array.isArray(filter.$or)) {
+            const orConditions = filter.$or
+            filter.$and = [{$or: orConditions},
+                { $or: [{ title: rx }, { author: rx }] }]
+
+        } else {
+            // Для гостей или ownerOnly просто добавляем AND с текстовым поиском
+            filter = {
+                $and: [
+                    filter,
+                    { $or: [{ title: rx }, { author: rx }] }
+                ]
+            }
+        }
     }
     // Склеиваем с фильтром по категориям через $and, если он есть
     const andParts = [filter]
