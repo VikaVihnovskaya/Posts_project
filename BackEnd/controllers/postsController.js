@@ -73,8 +73,11 @@ export async function getPosts(req, res) {
     // если owner=me — показываем только посты текущего пользователя
     if (requestedOwner === 'me') {
         if (!req.user) return res.status(401).json({ message: 'Unauthorized' })
+        const userIdObj = (req.user?.sub && mongoose.Types.ObjectId.isValid(req.user.sub))
+            ? new mongoose.Types.ObjectId(String(req.user.sub))
+            : null
         const { items, total } = await listPosts({
-            userId: req.user.sub,
+            userId: userIdObj,
             limit,
             page: pageIndex,
             ownerOnly: true ,
@@ -90,10 +93,12 @@ export async function getPosts(req, res) {
         })
         return res.json({ items, page, limit, total })
     }
-    const userId = req.user?.sub || null
+    const userId = (req.user?.sub && mongoose.Types.ObjectId.isValid(req.user.sub))
+        ? new mongoose.Types.ObjectId(String(req.user.sub))
+        : null
     let preferredCategoryIds = []
-    if (req.user?.sub) {
-        const userCategoryPrefs = await User.findById(req.user.sub).select('preferredCategoryIds').lean()
+    if (userId) {
+        const userCategoryPrefs = await User.findById(userId).select('preferredCategoryIds').lean()
         preferredCategoryIds = userCategoryPrefs?.preferredCategoryIds || []
     }
     const { items, total } = await listPosts({
@@ -126,7 +131,10 @@ export async function getPost(req, res) {
 }
 
 export async function createPostCtrl(req, res) {
-    const post = await createPost({ data: req.body, userId: req.user.sub })
+    const userIdObj = (req.user?.sub && mongoose.Types.ObjectId.isValid(req.user.sub))
+        ? new mongoose.Types.ObjectId(String(req.user.sub))
+        : null
+    const post = await createPost({ data: req.body, userId: userIdObj })
     reconcilePublishFields(post)
     await post.save()
     res.status(201).json(post)

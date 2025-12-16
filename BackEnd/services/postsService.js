@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import Post from '../models/Post.js'
 import Category from '../models/Category.js'
+
 const { Types } = mongoose
 function isValidObjectIdArray(arr) {
     return Array.isArray(arr) && arr.every(id => Types.ObjectId.isValid(id))
@@ -35,6 +36,37 @@ function escapeRegex(str) {
     // Экранируем спецсимволы RegExp, чтобы тег совпадал по точному значению
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+function createPipelineForPref(finalFilter, prefIds, sortDirection, page, limit) {
+    return [
+        {$match: finalFilter},
+        {
+            $addFields: {
+                effectiveDate: {$ifNull: ['$publishedAt', '$createdAt']},
+                preferredRank: {
+                    $cond: [
+                        {$gt: [{$size: {$setIntersection: ['$categories', prefIds]}}, 0]},
+                        0,
+                        1,
+                    ],
+                },
+            },
+        },
+        {$sort: {preferredRank: 1, effectiveDate: sortDirection, _id: sortDirection}},
+        {$skip: page * limit},
+        {$limit: limit},
+        {
+            $lookup: {
+                from: 'categories',
+                localField: 'categories',
+                foreignField: '_id',
+                as: 'categories',
+            },
+        },
+        {$project: {preferredRank: 0, effectiveDate: 0}},
+    ];
+}
+
 export async function listPosts({
                                     userId,
                                     limit,
@@ -51,6 +83,11 @@ export async function listPosts({
                                     q,
                                     preferredCategoryIds = [],
                                 }) {
+    // Приводим userId к ObjectId для корректной работы в aggregate
+     const userIdObj = userId
+         ? (userId instanceof Types.ObjectId
+             ? userId : (Types.ObjectId.isValid(userId) ? new Types.ObjectId(String(userId)) : null))
+         : null
     // Формируем фильтр по диапазону дат
     const dateFilter = {}
     if (dateFrom) dateFilter.$gte = dateFrom
@@ -92,7 +129,7 @@ export async function listPosts({
 
     //  1. Если запрошены только свои посты
     if (ownerOnly) {
-        filter.userId = userId
+        filter.userId = userIdObj
         // Ограничение по статусу (draft/published)
         if (['draft', 'published'].includes(status)) {
             filter.status = status
@@ -103,16 +140,16 @@ export async function listPosts({
             filter[dateField] = dateFilter
         }
         //  2. Если пользователь авторизован, но не только свои
-    } else if (userId) {
+    } else if (userIdObj) {
         if (hasDateFilter) {
             filter = {
                 $or: [
                     { status: 'published', publishedAt: dateFilter },
-                    { userId, createdAt: dateFilter },
+                    { userId: userIdObj, createdAt: dateFilter },
                 ],
             }
         } else {
-            filter = { $or: [{ status: 'published' }, { userId }] }
+            filter = { $or: [{ status: 'published' }, { userId: userIdObj }] }
         }
 
         // 3. Если пользователь не авторизован
@@ -146,42 +183,20 @@ export async function listPosts({
             sortOptions = { publishedAt: sortDirection, createdAt: sortDirection, _id: -1 }
         }
     }
-
     const hasPrefs = Array.isArray(preferredCategoryIds) && preferredCategoryIds.length > 0
-
     if (hasPrefs) {
-        // Приводим ID к ObjectId на всякий случай
-        const prefIds = preferredCategoryIds.map(id => id instanceof Types.ObjectId ? id : new Types.ObjectId(String(id)))
-
-           // Единое поле даты: publishedAt ?? createdAt
-        const pipeline = [
-            { $match: finalFilter },
-            { $addFields: {
-                    effectiveDate: { $ifNull: ['$publishedAt', '$createdAt'] },
-                    preferredRank: {
-                        $cond: [
-                            { $gt: [ { $size: { $setIntersection: ['$categories', prefIds] } }, 0 ] },
-                            0,
-                            1,
-                        ],
-                    },
-                }
-            },
-            // ВАЖНО: порядок ключей в $sort — именно такой
-            { $sort: { preferredRank: 1, effectiveDate: sortDirection, _id: sortDirection } },
-            { $skip: page * limit },
-            { $limit: limit },
-            { $lookup: { from: 'categories', localField: 'categories', foreignField: '_id', as: 'categories' } },
-            { $project: { preferredRank: 0, effectiveDate: 0 } },
-        ]
-
-        const [items, total] = await Promise.all([
+        // Приводим ID к ObjectId
+        const prefIds = preferredCategoryIds.map(id => id instanceof Types.ObjectId ? id : new Types.ObjectId(String(id))
+        )
+        const pipeline = createPipelineForPref(finalFilter, prefIds, sortDirection, page, limit);
+        const [items, totalAgg] = await Promise.all([
             Post.aggregate(pipeline),
-            Post.countDocuments(finalFilter),
+            Post.aggregate([{ $match: finalFilter }, { $count: 'cnt' }])
         ])
-
+        const total = Array.isArray(totalAgg) && totalAgg[0]?.cnt ? totalAgg[0].cnt : 0
         return { items, total }
     }
+
 
     // Выполняем запросы параллельно
     const [items, total] = await Promise.all([
