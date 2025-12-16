@@ -78,9 +78,9 @@
             <p>No posts yet</p>
           </div>
           <footer class="pager" v-if="myTotal > 0">
-            <button class="btn outline" :disabled="myPage === 0 || myLoading" @click="myPrev">Back</button>
-            <span>Page {{ myPage + 1 }} of {{ myTotalPages }}</span>
-            <button class="btn outline" :disabled="myPage >= myTotalPages - 1 || myLoading" @click="myNext">Next</button>
+            <button class="btn outline" :disabled="myPage === 1 || myLoading" @click="myPrev">Back</button>
+            <span>Page {{ myPage }} of {{ myTotalPages }}</span>
+            <button class="btn outline" :disabled="myPage >= myTotalPages  || myLoading" @click="myNext">Next</button>
           </footer>
       </section>
 
@@ -94,7 +94,7 @@ import {computed, onMounted, reactive, ref, watch, watchEffect} from 'vue'
 import {useAuthStore} from '../stores/auth'
 import {useRoute, useRouter} from 'vue-router'
 import PostCard from './PostCard.vue'
-import { usePreferencesStore } from '../stores/preferences'
+import {usePreferencesStore} from '../stores/preferences'
 
 const auth = useAuthStore()
 const user = computed(() => auth.user)
@@ -116,7 +116,7 @@ const placeholder = 'https://ui-avatars.com/api/?name=User&size=160'
 const myItems = ref([])
 const myLoading = ref(false)
 const myError = ref('')
-const myPage = ref(0)
+const myPage = ref(1)
 const myLimit = ref(10)
 const myTotal = ref(0)
 const myTotalPages = computed(() => Math.max(1, Math.ceil(myTotal.value / myLimit.value)))
@@ -243,9 +243,8 @@ async function loadMyPosts({ allowAdjust = true } = {}) {
     myItems.value = Array.isArray(data.items) ? data.items : []
     myTotal.value = data.total || 0
     // === Обработка выхода за пределы страниц ===
-    if (allowAdjust && myPage.value > 0 && myItems.value.length === 0) {
-      const totalPages = Math.max(1, Math.ceil(myTotal.value / myLimit.value))
-      const lastPage = Math.max(0, totalPages - 1)
+    if (allowAdjust && myPage.value > 1 && myItems.value.length === 0) {
+      const lastPage = Math.max(1, Math.ceil(myTotal.value / myLimit.value))
       if (myPage.value > lastPage) {
         myPage.value = lastPage
         await updateUrl({ replace: true }) // синхронизируем URL
@@ -266,7 +265,7 @@ function normalizeStatus(queryStatus) {
 
 function normalizePage(queryPage) {
   const pageNumber = Number(queryPage)
-  return Number.isInteger(pageNumber) && pageNumber >= 0 ? pageNumber : 0
+  return Number.isInteger(pageNumber) && pageNumber >= 1 ? pageNumber : 1
 }
 onMounted(async () => {
   // Синхронизируемся с URL перед загрузкой
@@ -285,7 +284,7 @@ function updateUrl({ replace = true } = {}) {
     ...route.query,
     // Удаляем значения по умолчанию — Vue Router не будет добавлять их в query
     status: myStatus.value === 'all' ? undefined : myStatus.value,
-    page: myPage.value > 0 ? String(myPage.value) : undefined,
+    page: myPage.value > 1 ? String(myPage.value) : undefined,
   }
 
   const navigation = route.name
@@ -297,20 +296,20 @@ function updateUrl({ replace = true } = {}) {
 
 // При изменении фильтра статуса — сбрасываем страницу, обновляем URL и загружаем заново
 watch(myStatus, async () => {
-  myPage.value = 0
+  myPage.value = 1
   await updateUrl({ replace: true })
   await loadMyPosts()
 })
 
 async function myNext() {
-  if (myPage.value < myTotalPages.value - 1) {
+  if (myPage.value < myTotalPages.value) {
     myPage.value += 1
     await updateUrl({ replace: false }) // записать в историю
     await loadMyPosts()
   }
 }
 async function myPrev() {
-  if (myPage.value > 0) {
+  if (myPage.value > 1) {
     myPage.value -= 1
     await updateUrl({ replace: false })
     await loadMyPosts()

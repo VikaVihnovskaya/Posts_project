@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 import User from "../models/User.js"
 
 export async function getPosts(req, res) {
-    const { limit, page } = parsePaging(req)
+    const { limit, page, pageIndex } = parsePaging(req)
     const requestedOwner = req.query.owner
     const requestedStatus = req.query.status // 'draft' | 'published' | undefined
     // Парс дат из query (ожидаем YYYY-MM-DD)
@@ -76,7 +76,7 @@ export async function getPosts(req, res) {
         const { items, total } = await listPosts({
             userId: req.user.sub,
             limit,
-            page,
+            page: pageIndex,
             ownerOnly: true ,
             status: requestedStatus,
             dateFrom: startDate,
@@ -99,7 +99,7 @@ export async function getPosts(req, res) {
     const { items, total } = await listPosts({
         userId,
         limit,
-        page,
+        page: pageIndex,
         dateFrom: startDate,
         dateTo: endDate,
         categoryIds,

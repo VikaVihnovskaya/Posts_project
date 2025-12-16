@@ -105,9 +105,9 @@
         </section>
 
         <footer class="pager" v-if="total > 0">
-          <button class="btn outline" :disabled="page === 0 || loading" @click="prevPage">Back</button>
-          <span>Page {{ page + 1 }} of {{ totalPages }}</span>
-          <button class="btn outline" :disabled="page >= totalPages - 1 || loading" @click="nextPage">Next</button>
+          <button class="btn outline" :disabled="page === 1 || loading" @click="prevPage">Back</button>
+          <span>Page {{ page }} of {{ totalPages }}</span>
+          <button class="btn outline" :disabled="page >= totalPages || loading" @click="nextPage">Next</button>
         </footer>
       </main>
    </div>
@@ -128,7 +128,7 @@ const loading = ref(false)
 const error = ref('')
 
 // Пагинация
-const page = ref(0)
+const page = ref(1)
 const limit = ref(10)
 const total = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)))
@@ -167,13 +167,13 @@ function onSearchInput() {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     const q = (search.value || '').trim()
-    updateQuery({ page: 0, q })
+    updateQuery({ page: 1, q })
   }, 400)
 }
 
 function clearSearch() {
   search.value = ''
-  updateQuery({ page: 0, q: '' })
+  updateQuery({ page: 1, q: '' })
 }
 // Чтение и запись query
 function normalizeQuery(rawQuery) {
@@ -218,12 +218,12 @@ function normalizeQuery(rawQuery) {
   }
   const q = typeof query.q === 'string' ? query.q : ''
   return {
-    // Номер страницы: целое число ≥ 0, по умолчанию 0
-    page: Number.isFinite(parsedPage) && parsedPage >= 0 ? parsedPage : 0,
+    // Номер страницы: целое число ≥ 1, по умолчанию 1
+    page: Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : 1,
 
     // Кол-во элементов на странице: 1–100, по умолчанию 10
     limit:
-        Number.isFinite(parsedLimit) && parsedLimit > 0 && parsedLimit <= 100
+        Number.isFinite(parsedLimit) && parsedLimit > 1 && parsedLimit <= 100
             ? parsedLimit
             : 10,
 
@@ -264,7 +264,7 @@ function buildQuery() {
   return query
 }
 
-async function load() {
+async function load({ allowAdjust = true } = {}) {
   loading.value = true
   error.value = ''
   try {
@@ -279,7 +279,14 @@ async function load() {
     const data = await response.json()
     items.value = Array.isArray(data.items) ? data.items : []
     total.value = data.total || 0
-
+    if (allowAdjust && page.value > 1 && items.value.length === 0) {
+      const lastPage = Math.max(1, Math.ceil(total.value / limit.value))
+      if (page.value > lastPage) {
+        page.value = lastPage
+        await updateQuery({ page: lastPage }, { replace: true })
+        return await load({ allowAdjust: false })
+      }
+    }
   } catch (e) {
     error.value = e.message || 'Error loading posts'
     items.value = []
@@ -306,14 +313,20 @@ watch(
     },
     { immediate: true }
 )
-async function updateQuery(partial, { replace = false } = {}) {
+async function updateQuery(partial = {}, { replace = false } = {}) {
   const current = normalizeQuery(route.query)
   // Собираем итоговый объект, удаляем пустые
   const next = {
-    ...route.query, // сохранить сторонние параметры
-    page: String(partial.page ?? current.page),
-    limit: String(partial.limit ?? current.limit),
+    ...route.query,
   }
+
+  const nextPageNumber = Number(partial.page ?? current.page)
+  if (Number.isFinite(nextPageNumber) && nextPageNumber > 1) {
+    next.page = String(nextPageNumber)
+  } else {
+    delete next.page
+  }
+  next.limit = String(partial.limit ?? current.limit)
   const startDate = partial.dateFrom ?? current.dateFrom
   const endDate = partial.dateTo ?? current.dateTo
   if (startDate) next.dateFrom = startDate; else delete next.dateFrom
@@ -346,7 +359,7 @@ async function updateQuery(partial, { replace = false } = {}) {
 }
 function applyFilters() {
   // При применении фильтра сбрасываем на первую страницу
-  updateQuery({ page: 0, dateFrom: dateFrom.value, dateTo: dateTo.value, categories: selectedCategoryIds.value, tags: selectedTags.value, match: tagMatch.value, sort: sort.value, })
+  updateQuery({ page: 1, dateFrom: dateFrom.value, dateTo: dateTo.value, categories: selectedCategoryIds.value, tags: selectedTags.value, match: tagMatch.value, sort: sort.value, })
 }
 function addTag() {
   const raw = tagInput.value || ''
@@ -367,21 +380,23 @@ function resetFilters() {
   // Возвращаем сортировку к дефолту
   sort.value = 'createdAt:desc'
   search.value = ''
-  updateQuery({ page: 0, dateFrom: '', dateTo: '', categories: [], tags: [], match: 'contains' , sort: sort.value,  q: ''})
+  updateQuery({ page: 1, dateFrom: '', dateTo: '', categories: [], tags: [], match: 'contains' , sort: sort.value,  q: ''})
 }
 function onSortChange() {
   // При смене сортировки начинаем с первой страницы
-  updateQuery({ page: 0, sort: sort.value })
+  updateQuery({ page: 1, sort: sort.value })
 }
 function nextPage() {
-  if (page.value < totalPages.value - 1) {
-    updateQuery({ page: page.value + 1 })
+  if (page.value < totalPages.value ) {
+    page.value += 1
+    updateQuery({ page: page.value })
   }
 }
 
 function prevPage() {
-  if (page.value > 0) {
-    updateQuery({ page: page.value - 1 })
+  if (page.value > 1) {
+    page.value -= 1
+    updateQuery({ page: page.value })
   }
 }
 async function onLogout() {
